@@ -1,0 +1,920 @@
+openapi: 3.1.0
+info:
+  title: 心灵画册可选远端 API 与本地领域数据契约
+  version: 1.0.0-draft
+  description: |
+    设计契约，尚未部署。HTTP paths 仅用于用户另行授权的单次云分析及客户端密文同步。
+    消息、日页、邀请、来源授权与行为摘要的 Local* schema 是设备内领域服务的传输无关契约，
+    绝不意味着当前静态网页会向远端 POST 私人原话。当前 Demo 只有页面内存与合成数据。
+servers:
+  - url: https://api.example.invalid
+    description: 占位地址；不是可用服务，也不得作为前端默认请求目标。
+tags:
+  - name: Optional cloud analysis
+  - name: Optional encrypted sync
+x-implementation-status: future-contract-only
+x-local-operations:
+  sendMessage:
+    request: '#/components/schemas/LocalSendMessageRequest'
+    response: '#/components/schemas/LocalSendMessageResult'
+  correctInterpretation:
+    request: '#/components/schemas/LocalCorrectInterpretationRequest'
+    response: '#/components/schemas/LocalSendMessageResult'
+  listDays:
+    response: '#/components/schemas/LocalDayList'
+  getDay:
+    response: '#/components/schemas/LocalDayPage'
+  editEntry:
+    request: '#/components/schemas/LocalEditEntryRequest'
+    response: '#/components/schemas/LocalEntryMutationResult'
+  deleteEntry:
+    request: '#/components/schemas/LocalDeleteEntryRequest'
+    response: '#/components/schemas/LocalEntryMutationResult'
+  setDayTitle:
+    request: '#/components/schemas/LocalSetTitleRequest'
+    response: '#/components/schemas/LocalDayTitle'
+  markInvitationShown:
+    request: '#/components/schemas/LocalInvitationEventRequest'
+    response: '#/components/schemas/LocalInvitationState'
+  settleInvitation:
+    request: '#/components/schemas/LocalInvitationEventRequest'
+    response: '#/components/schemas/LocalInvitationState'
+  setCadence:
+    request: '#/components/schemas/LocalSetCadenceRequest'
+    response: '#/components/schemas/LocalInvitationState'
+  grantSource:
+    request: '#/components/schemas/LocalSourceGrantRequest'
+    response: '#/components/schemas/LocalSourceGrant'
+  revokeSource:
+    request: '#/components/schemas/LocalSourceRevokeRequest'
+    response: '#/components/schemas/LocalSourceGrant'
+  getBehaviorSummary:
+    response: '#/components/schemas/LocalBehaviorSummary'
+  deleteImportedSourceData:
+    request: '#/components/schemas/LocalDeleteImportedSourceRequest'
+    response: '#/components/schemas/LocalEntryMutationResult'
+paths:
+  /v1/analysis/policy:
+    get:
+      tags: [Optional cloud analysis]
+      summary: 取得本次许可前应展示的模型处理说明（无私人内容）
+      operationId: getAnalysisPolicy
+      responses:
+        '200':
+          description: 当前服务商、目的及保留说明；不等于用户同意。
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalysisPolicy' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/analysis/proposals:
+    post:
+      tags: [Optional cloud analysis]
+      summary: 单次授权片段的模型提议；不修改本地记录
+      description: |
+        客户端必须先向用户展示本次确切消息、旧片段、目的与模型服务商；拒绝或断网不发请求。
+        一次许可只绑定一次请求和内容摘要；任何文本或引用版本变化须重新预览、重新同意。
+        服务端按本次授权片段构建 Prompt，不访问同步密文或其他记录。
+      operationId: createAnalysisProposal
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnalysisProposalRequest' }
+            examples:
+              oneMessage:
+                summary: 虚构示例；不是实际调用证据
+                value:
+                  clientRequestId: 1be40f8e-0d33-4d5a-9182-3033c9ea97a7
+                  spaceRevision: 3
+                  timezone: Asia/Shanghai
+                  payload:
+                    currentMessage:
+                      id: 0c07ac9b-e639-4353-8a5e-b57876db612e
+                      revision: 1
+                      text: 今天和朋友散步，回来后觉得轻松一些。
+                    citedEntries: []
+                  approval:
+                    approvalId: 48bfdb98-1d58-470d-a851-56232e468e68
+                    purpose: single_question_proposal
+                    policyVersion: policy-2026-09
+                    approvedAt: '2026-09-29T20:00:00+08:00'
+                    previewSha256: 076440d964c06868a799efbe5868745066a7a3e9e513bfb19418b2f658991c7d
+      responses:
+        '200':
+          description: 待客户端校验的提议；不能直接写入日记或替换原话。
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalysisProposalResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '504': { $ref: '#/components/responses/Timeout' }
+  /v1/sync/enrollment:
+    post:
+      tags: [Optional encrypted sync]
+      summary: 用户另行开启账号密文同步
+      operationId: enrollSync
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncEnrollmentRequest' }
+      responses:
+        '201':
+          description: 只建立同步资格，不接收或解密私人记录。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncEnrollment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Optional encrypted sync]
+      summary: 关闭账号密文同步并删除服务端密文包
+      operationId: revokeSync
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204':
+          description: 服务端已停止同步并清除在线密文；备份处置按上线前公示的政策。
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /v1/sync/envelopes/current:
+    get:
+      tags: [Optional encrypted sync]
+      summary: 取得最新密文包，不在服务端解密
+      operationId: getSyncEnvelope
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 已登记账号的当前密文包。
+          headers:
+            ETag:
+              description: 后续更新使用的强版本标识。
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Optional encrypted sync]
+      summary: 比较版本后保存客户端已加密的完整快照
+      description: |
+        创建首版用 If-None-Match: *；更新用 If-Match: 上次取得的 ETag。
+        412 时客户端下载当前密文，在设备端解密、合并或让用户处理冲突；禁止静默覆盖。
+        服务端只校验包大小、格式、认证与版本，不接收密钥或明文。
+      operationId: putSyncEnvelope
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - in: header
+          name: If-Match
+          required: false
+          schema: { type: string }
+        - in: header
+          name: If-None-Match
+          required: false
+          schema: { type: string, enum: ['*'] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncEnvelopeUpload' }
+      responses:
+        '200':
+          description: 已保存新密文版本。
+          headers:
+            ETag:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncEnvelopeReceipt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: OIDC access token
+      description: 未来账户服务使用 Authorization Code + PKCE；当前 Demo 无账号或 token。
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      description: 客户端为一次用户操作生成 UUID；同键同内容重试返回同一结果，异内容返回 409。
+      schema: { type: string, format: uuid }
+  responses:
+    BadRequest:
+      description: 格式或字段无效。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Unauthorized:
+      description: 未登录或凭据失效。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    NotFound:
+      description: 未找到，或当前账户无权访问此资源。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Conflict:
+      description: 幂等键复用不同内容、许可已用或政策版本失效；本地空间版本由客户端校验。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    PreconditionFailed:
+      description: 密文快照版本冲突；客户端必须先下载最新版本再合并。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Unprocessable:
+      description: 没有可靠引用或本次片段不适合生成提议。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    RateLimited:
+      description: 单次云分析达到频率限制。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Unavailable:
+      description: 服务未配置、不可用或拒绝使用不符合政策的模型。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+    Timeout:
+      description: 模型超时；客户端本地规则降级，不自动重发私人内容。
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } }
+  schemas:
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          enum: [invalid_request, unauthorized, not_found, conflict, consent_invalid, stale_reference, no_reliable_citation, rate_limited, model_unavailable, model_timeout, precondition_failed]
+        message:
+          type: string
+          description: 安全提示，不包含私人正文、Prompt、原图或上游堆栈。
+        requestId: { type: string, format: uuid }
+    AnalysisPolicy:
+      type: object
+      additionalProperties: false
+      required: [version, providerName, region, purpose, retentionSummary, updatedAt]
+      properties:
+        version: { type: string, minLength: 1 }
+        providerName: { type: string, minLength: 1 }
+        region: { type: string, minLength: 1 }
+        purpose: { type: string, const: single_question_proposal }
+        retentionSummary: { type: string, minLength: 1 }
+        updatedAt: { type: string, format: date-time }
+    AnalysisMessageExcerpt:
+      type: object
+      additionalProperties: false
+      required: [id, revision, text]
+      properties:
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+    AnalysisEntryExcerpt:
+      type: object
+      additionalProperties: false
+      required: [id, revision, text, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 2000 }
+        occurredAt: { type: string, format: date-time }
+    AnalysisPayload:
+      type: object
+      additionalProperties: false
+      required: [currentMessage, citedEntries]
+      properties:
+        currentMessage: { $ref: '#/components/schemas/AnalysisMessageExcerpt' }
+        citedEntries:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/AnalysisEntryExcerpt' }
+    SingleUseApproval:
+      type: object
+      additionalProperties: false
+      required: [approvalId, purpose, policyVersion, approvedAt, previewSha256]
+      description: |
+        客户端只在用户看过与 payload 完全相同的片段清单并按下同意后创建。
+        previewSha256=SHA-256(UTF-8(JSON.stringify(orderedArray)))。orderedArray 首项是
+        ["current_message",id,revision,text]，后续每条旧记录是
+        ["entry",id,revision,text,occurredAt]，与预览顺序一致。JSON 不加空白，
+        不改写原话字符或做 Unicode 归一化；实现须用固定样例对照字节与摘要。
+        服务端拒绝政策版本或摘要不符；approvedAt 距服务端接收时间须不超过 5 分钟。
+        approvalId 只能成功使用一次；相同 Idempotency-Key 的网络重试返回同一结果。
+      properties:
+        approvalId: { type: string, format: uuid }
+        purpose: { type: string, const: single_question_proposal }
+        policyVersion: { type: string, minLength: 1 }
+        approvedAt: { type: string, format: date-time }
+        previewSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    AnalysisProposalRequest:
+      type: object
+      additionalProperties: false
+      required: [clientRequestId, spaceRevision, timezone, payload, approval]
+      properties:
+        clientRequestId: { type: string, format: uuid }
+        spaceRevision: { type: integer, minimum: 1 }
+        timezone:
+          type: string
+          description: IANA 时区，例如 Asia/Shanghai。
+          minLength: 1
+        payload: { $ref: '#/components/schemas/AnalysisPayload' }
+        approval: { $ref: '#/components/schemas/SingleUseApproval' }
+    Citation:
+      type: object
+      additionalProperties: false
+      required: [entryId, entryRevision, quote]
+      properties:
+        entryId: { type: string, format: uuid }
+        entryRevision: { type: integer, minimum: 1 }
+        quote: { type: string, minLength: 1 }
+    AnalysisProposalResponse:
+      type: object
+      additionalProperties: false
+      required: [proposalId, clientRequestId, baseSpaceRevision, status, provenance, generatedAt]
+      properties:
+        proposalId: { type: string, format: uuid }
+        clientRequestId: { type: string, format: uuid }
+        baseSpaceRevision: { type: integer, minimum: 1 }
+        status: { type: string, enum: [proposed, no_reliable_proposal] }
+        provenance: { type: string, const: cloud_model }
+        interpretation:
+          anyOf:
+            - $ref: '#/components/schemas/LocalInterpretation'
+            - type: 'null'
+        suggestedQuestion:
+          anyOf:
+            - $ref: '#/components/schemas/AnalysisQuestion'
+            - type: 'null'
+        generatedAt: { type: string, format: date-time }
+      description: |
+        服务端不持久化为用户事实。客户端只在空间版本、目标消息与全部引用版本仍有效时采纳；
+        过时、撤权或删除之后到达的结果直接丢弃。
+    AnalysisQuestion:
+      type: object
+      additionalProperties: false
+      required: [text, citations]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 160 }
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/Citation' }
+    SyncEnrollmentRequest:
+      type: object
+      additionalProperties: false
+      required: [clientDeviceId, userOptedInAt]
+      properties:
+        clientDeviceId: { type: string, format: uuid }
+        userOptedInAt: { type: string, format: date-time }
+      description: 仅确认独立同步选择；密钥在客户端生成／配对，绝不放入此请求。
+    SyncEnrollment:
+      type: object
+      additionalProperties: false
+      required: [spaceId, clientDeviceId, enrolledAt]
+      properties:
+        spaceId: { type: string, format: uuid }
+        clientDeviceId: { type: string, format: uuid }
+        enrolledAt: { type: string, format: date-time }
+    SyncEnvelopeUpload:
+      type: object
+      additionalProperties: false
+      required: [clientDeviceId, schemaVersion, keyVersion, cipherSuite, nonceBase64, ciphertextBase64]
+      properties:
+        clientDeviceId: { type: string, format: uuid }
+        schemaVersion: { type: integer, const: 1 }
+        keyVersion: { type: integer, minimum: 1 }
+        cipherSuite: { type: string, const: AES-256-GCM }
+        nonceBase64: { type: string, contentEncoding: base64 }
+        ciphertextBase64: { type: string, contentEncoding: base64 }
+      description: |
+        客户端加密 LocalSyncDocument。密钥只在授权设备；服务端不接收明文／密钥。
+        必须使用无重复 nonce 和经审计的密钥生成、配对及恢复实现，不能复用 Demo 内存方案。
+    SyncEnvelope:
+      type: object
+      additionalProperties: false
+      required: [clientDeviceId, schemaVersion, keyVersion, cipherSuite, nonceBase64, ciphertextBase64, spaceId, serverRevision, savedAt]
+      properties:
+        clientDeviceId: { type: string, format: uuid }
+        schemaVersion: { type: integer, const: 1 }
+        keyVersion: { type: integer, minimum: 1 }
+        cipherSuite: { type: string, const: AES-256-GCM }
+        nonceBase64: { type: string, contentEncoding: base64 }
+        ciphertextBase64: { type: string, contentEncoding: base64 }
+        spaceId: { type: string, format: uuid }
+        serverRevision: { type: integer, minimum: 1 }
+        savedAt: { type: string, format: date-time }
+    SyncEnvelopeReceipt:
+      type: object
+      additionalProperties: false
+      required: [spaceId, serverRevision, savedAt]
+      properties:
+        spaceId: { type: string, format: uuid }
+        serverRevision: { type: integer, minimum: 1 }
+        savedAt: { type: string, format: date-time }
+    LocalInterpretation:
+      type: object
+      additionalProperties: false
+      required: [kind, status, provenance]
+      properties:
+        kind:
+          type: string
+          enum: [answer, proactive_record, skip, decline, request_more, uncertain]
+        status: { type: string, enum: [proposed, accepted, user_corrected] }
+        provenance: { type: string, enum: [local_rule, on_device_model, cloud_model, user_correction] }
+      description: 暂定行为解释；不是人格／情绪判断。含糊表达保持 uncertain 并可由用户纠正。
+    LocalMessage:
+      type: object
+      additionalProperties: false
+      required: [id, clientOperationId, sequence, text, occurredAt, recordedAt, revision, interpretation]
+      properties:
+        id: { type: string, format: uuid }
+        clientOperationId: { type: string, format: uuid }
+        sequence: { type: integer, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+        occurredAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        revision: { type: integer, minimum: 1 }
+        interpretation: { $ref: '#/components/schemas/LocalInterpretation' }
+        replyToQuestionId: { type: [string, 'null'], format: uuid }
+        invitationId: { type: [string, 'null'], format: uuid }
+        entryId: { type: [string, 'null'], format: uuid }
+        controlEvent: { type: [string, 'null'], enum: [skip, decline, request_more, null] }
+      description: |
+        进程内解密视图；text 由关联 Entry 的唯一有效正文派生，控制话语则由
+        LocalStoredMessage.controlText 派生。编辑或删除 Entry 后不可保留旧消息正文。
+        不按 ID 文本或时间字符串推断消息顺序。
+    LocalStoredMessage:
+      type: object
+      additionalProperties: false
+      required: [id, clientOperationId, sequence, occurredAt, recordedAt, revision, interpretation, entryId, controlText]
+      properties:
+        id: { type: string, format: uuid }
+        clientOperationId: { type: string, format: uuid }
+        sequence: { type: integer, minimum: 1 }
+        occurredAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        revision: { type: integer, minimum: 1 }
+        interpretation: { $ref: '#/components/schemas/LocalInterpretation' }
+        replyToQuestionId: { type: [string, 'null'], format: uuid }
+        invitationId: { type: [string, 'null'], format: uuid }
+        entryId: { type: [string, 'null'], format: uuid }
+        controlEvent: { type: [string, 'null'], enum: [skip, decline, request_more, null] }
+        controlText: { type: [string, 'null'], minLength: 1 }
+      oneOf:
+        - properties:
+            entryId: { type: string, format: uuid }
+            controlText: { type: 'null' }
+        - properties:
+            entryId: { type: 'null' }
+            controlText: { type: string, minLength: 1 }
+      description: |
+        密文同步前的本地存储形状。有关联 Entry 时不存第二份原话；无 Entry 的
+        控制话语才使用 controlText。行为解释纠正时在同一事务搬移当前正文。
+    LocalQuestion:
+      type: object
+      additionalProperties: false
+      required: [id, revision, text, provenance, status, displayedAt, citations]
+      allOf:
+        - if:
+            properties: { status: { const: citation_revised } }
+            required: [status]
+          then:
+            properties: { text: { const: 引用已修订 } }
+        - if:
+            properties: { status: { const: citation_deleted } }
+            required: [status]
+          then:
+            properties: { text: { const: 引用已删除 } }
+      properties:
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        text: { type: string, minLength: 1 }
+        provenance: { type: string, enum: [local_rule, on_device_model, cloud_model] }
+        status: { type: string, enum: [ready, citation_revised, citation_deleted] }
+        displayedAt: { type: string, format: date-time }
+        answeredByMessageId: { type: [string, 'null'], format: uuid }
+        invitationId: { type: [string, 'null'], format: uuid }
+        citations:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/LocalCitationRef' }
+      description: |
+        已回答问句连同全部引用的 ID 与当时版本在同一事务保存；中性规则问题可以无引用。
+        任一引用被编辑或删除，立即将整条问句 text 改成无私人原话的状态提示，
+        并标记 citation_revised 或 citation_deleted；读取、同步与导出均不得返回旧题干。
+    LocalEntryCitationRef:
+      type: object
+      additionalProperties: false
+      required: [kind, id, revision]
+      properties:
+        kind: { type: string, const: entry }
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+    LocalObservationCitationRef:
+      type: object
+      additionalProperties: false
+      required: [kind, id, revision]
+      properties:
+        kind: { type: string, const: observation }
+        id: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+    LocalCitationRef:
+      oneOf:
+        - $ref: '#/components/schemas/LocalEntryCitationRef'
+        - $ref: '#/components/schemas/LocalObservationCitationRef'
+      description: 问句可引用记录或由记录得出的已纠正观察；任何一方变化都使旧题干失效。
+    LocalJournalEntry:
+      type: object
+      additionalProperties: false
+      required: [id, messageId, text, journalDate, timezone, occurredAt, recordedAt, revision, source]
+      properties:
+        id: { type: string, format: uuid }
+        messageId: { type: string, format: uuid }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+        journalDate: { type: string, format: date }
+        timezone: { type: string, minLength: 1 }
+        occurredAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        revision: { type: integer, minimum: 1 }
+        source: { type: string, enum: [conversation] }
+      description: 有效记录的唯一正文来源；聊天与日页的正文都从当前 Entry 投影。
+    LocalObservation:
+      type: object
+      additionalProperties: false
+      required: [id, text, status, provenance, citations, revision]
+      properties:
+        id: { type: string, format: uuid }
+        text: { type: string, minLength: 1 }
+        status: { type: string, enum: [tentative, user_corrected] }
+        provenance: { type: string, enum: [local_rule, on_device_model, cloud_model, user_correction] }
+        citations:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/LocalEntryCitationRef' }
+        revision: { type: integer, minimum: 1 }
+    LocalDayTitle:
+      type: object
+      additionalProperties: false
+      required: [text, revision, dependencyEntryIds]
+      properties:
+        text: { type: string, minLength: 1 }
+        revision: { type: integer, minimum: 1 }
+        dependencyEntryIds:
+          type: array
+          items: { type: string, format: uuid }
+      description: |
+        v1 保守依赖集：设标题的原子事务中，由本地领域服务将空间内所有当前有效
+        Entry ID 与该标题既有依赖取并集。自由文本可能转述任意一天的原话，
+        因此不信任客户端自报的部分引用；可能多撤标题，确认界面须预先告知。
+    LocalDayPage:
+      type: object
+      additionalProperties: false
+      required: [spaceId, spaceRevision, date, timezone, entries, questions, observations]
+      properties:
+        spaceId: { type: string, format: uuid }
+        spaceRevision: { type: integer, minimum: 1 }
+        date: { type: string, format: date }
+        timezone: { type: string, minLength: 1 }
+        title:
+          anyOf:
+            - $ref: '#/components/schemas/LocalDayTitle'
+            - type: 'null'
+        entries:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/LocalJournalEntry' }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/LocalQuestion' }
+        observations:
+          type: array
+          items: { $ref: '#/components/schemas/LocalObservation' }
+    LocalDayList:
+      type: object
+      additionalProperties: false
+      required: [spaceId, spaceRevision, dates]
+      properties:
+        spaceId: { type: string, format: uuid }
+        spaceRevision: { type: integer, minimum: 1 }
+        dates:
+          type: array
+          items: { type: string, format: date }
+      description: dates 只含至少一条当前有效记录的日子，按日期从新到旧。
+    LocalInvitation:
+      type: object
+      additionalProperties: false
+      required: [id, date, state, revision]
+      properties:
+        id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        state: { type: string, enum: [scheduled, delivered, shown, settled_answered, settled_unanswered, cancelled] }
+        revision: { type: integer, minimum: 1 }
+        shownAt: { type: [string, 'null'], format: date-time }
+        settledAt: { type: [string, 'null'], format: date-time }
+    LocalCadenceChangeEvent:
+      type: object
+      additionalProperties: false
+      required: [id, reason, previousCadence, nextCadence, decidedAt, effectiveDate, anchorDate, triggeringInvitationIds]
+      properties:
+        id: { type: string, format: uuid }
+        reason: { type: string, enum: [manual_choice, two_shown_rounds_unanswered, pause, resume] }
+        previousCadence: { type: string, enum: [daily, weekly, manual] }
+        nextCadence: { type: string, enum: [daily, weekly, manual] }
+        decidedAt: { type: string, format: date-time }
+        effectiveDate: { type: string, format: date }
+        anchorDate: { type: string, format: date }
+        triggeringInvitationIds:
+          type: array
+          maxItems: 2
+          items: { type: string, format: uuid }
+      description: |
+        用户可查看的节奏变更记录。自动降档仅在连续两个不同的已展示邀请日
+        整轮未回答后产生，triggeringInvitationIds 包含该两轮；不自动升档。
+        手动改档次日生效，anchorDate 为生效日；自动降档次日生效，
+        anchorDate 为第二轮邀请日，以便周节奏从该日计算。
+    LocalInvitationState:
+      type: object
+      additionalProperties: false
+      required: [cadence, cadenceAnchorDate, paused, unansweredShownRounds, pendingChange, changeEvents, invitations]
+      properties:
+        cadence: { type: string, enum: [daily, weekly, manual] }
+        cadenceAnchorDate: { type: string, format: date }
+        paused: { type: boolean }
+        unansweredShownRounds: { type: integer, minimum: 0, maximum: 1 }
+        pendingChange:
+          anyOf:
+            - $ref: '#/components/schemas/LocalCadenceChangeEvent'
+            - type: 'null'
+        changeEvents:
+          type: array
+          items: { $ref: '#/components/schemas/LocalCadenceChangeEvent' }
+        invitations:
+          type: array
+          items: { $ref: '#/components/schemas/LocalInvitation' }
+      description: 连续两个已展示整轮未回答才降一档；回看、未展示、失败和暂停不计。
+    LocalSetCadenceRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, expectedSpaceRevision, requestedCadence, requestedAt, timezone]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+        requestedCadence: { type: string, enum: [daily, weekly, manual] }
+        requestedAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1 }
+      description: 本地事务记录手动变更，按用户时区次日生效；同时清零未回应连击。
+    LocalSendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, expectedSpaceRevision, text, occurredAt, timezone]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+        occurredAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1 }
+        visibleQuestionId: { type: [string, 'null'], format: uuid }
+        visibleInvitationId: { type: [string, 'null'], format: uuid }
+      description: UI 附带正在展示的问句／邀请上下文，但不让用户在发送前选择行为类型。
+    LocalSendMessageResult:
+      type: object
+      additionalProperties: false
+      required: [spaceRevision, message, entry, answeredQuestion, nextQuestion, invitation]
+      properties:
+        spaceRevision: { type: integer, minimum: 1 }
+        message: { $ref: '#/components/schemas/LocalMessage' }
+        entry:
+          anyOf:
+            - $ref: '#/components/schemas/LocalJournalEntry'
+            - type: 'null'
+        answeredQuestion:
+          anyOf:
+            - $ref: '#/components/schemas/LocalQuestion'
+            - type: 'null'
+        nextQuestion:
+          anyOf:
+            - $ref: '#/components/schemas/LocalQuestion'
+            - type: 'null'
+        invitation: { $ref: '#/components/schemas/LocalInvitationState' }
+      description: 这些投影来自一次原子本地事务；普通消息、控制事件或回答都返回稳定 messageId。
+    LocalCorrectInterpretationRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, messageId, expectedMessageRevision, correctedKind]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        messageId: { type: string, format: uuid }
+        expectedMessageRevision: { type: integer, minimum: 1 }
+        correctedKind:
+          type: string
+          enum: [answer, proactive_record, skip, decline, request_more, uncertain]
+    LocalEditEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, entryId, expectedRevision, text]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        entryId: { type: string, format: uuid }
+        expectedRevision: { type: integer, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 10000 }
+    LocalDeleteEntryRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, entryId, expectedRevision]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        entryId: { type: string, format: uuid }
+        expectedRevision: { type: integer, minimum: 1 }
+    LocalEntryMutationResult:
+      type: object
+      additionalProperties: false
+      required: [spaceRevision, invalidatedObservationIds, invalidatedQuestionIds, withdrawnTitleDates]
+      properties:
+        spaceRevision: { type: integer, minimum: 1 }
+        entry:
+          anyOf:
+            - $ref: '#/components/schemas/LocalJournalEntry'
+            - type: 'null'
+        invalidatedObservationIds:
+          type: array
+          items: { type: string, format: uuid }
+        invalidatedQuestionIds:
+          type: array
+          items: { type: string, format: uuid }
+        withdrawnTitleDates:
+          type: array
+          items: { type: string, format: date }
+    LocalSetTitleRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, date, text, expectedRevision, expectedSpaceRevision]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        text: { type: string, minLength: 1 }
+        expectedRevision: { type: integer, minimum: 0 }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+      description: 本地服务在版本匹配的事务中计算完整 dependencyEntryIds；请求不得自行缩小依赖。
+    LocalInvitationEventRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, invitationId, event, occurredAt, expectedRevision]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        invitationId: { type: string, format: uuid }
+        event: { type: string, enum: [delivered, shown, settled_answered, settled_unanswered, cancelled] }
+        occurredAt: { type: string, format: date-time }
+        expectedRevision: { type: integer, minimum: 1 }
+      description: shown 必须对应实际呈现；只在 shown 后允许 settle，重试幂等。
+    LocalSourceGrantRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, source, purpose, scope, approvedAt]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        source:
+          type: string
+          enum: [watch_steps, phone_spending, app_usage, photo, calendar, note, office]
+        purpose:
+          type: string
+          enum: [import_daily_summary, use_in_journal]
+        scope:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        approvedAt: { type: string, format: date-time }
+        providerPermissionRef:
+          type: [string, 'null']
+          description: 本地连接器对系统／提供方授权的引用；不得是明文令牌。
+      description: 应用内逐来源逐用途许可；云模型出站仍另需单次 Cloud Processing Approval。
+    LocalSourceRevokeRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, grantId, expectedGrantVersion, revokedAt]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        grantId: { type: string, format: uuid }
+        expectedGrantVersion: { type: integer, minimum: 1 }
+        revokedAt: { type: string, format: date-time }
+      description: 停止后续读取与使用；已导入副本／摘要须另用明确删除动作处理。
+    LocalDeleteImportedSourceRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, source, confirmedAt]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        source:
+          type: string
+          enum: [watch_steps, phone_spending, app_usage, photo, calendar, note, office]
+        confirmedAt: { type: string, format: date-time }
+      description: 独立的删除动作；级联清除已导入副本、摘要、索引与依赖观察。
+    LocalSourceGrant:
+      type: object
+      additionalProperties: false
+      required: [id, source, purpose, scope, status, grantVersion, approvedAt]
+      properties:
+        id: { type: string, format: uuid }
+        source:
+          type: string
+          enum: [watch_steps, phone_spending, app_usage, photo, calendar, note, office]
+        purpose: { type: string, enum: [import_daily_summary, use_in_journal] }
+        scope:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1 }
+        status: { type: string, enum: [active, revoked, provider_permission_missing] }
+        grantVersion: { type: integer, minimum: 1 }
+        approvedAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    LocalSummaryPoint:
+      type: object
+      additionalProperties: false
+      required: [date, value, capturedAt, grantId, grantVersion]
+      properties:
+        date: { type: string, format: date }
+        value: { type: [number, 'null'], minimum: 0 }
+        capturedAt: { type: string, format: date-time }
+        grantId: { type: string, format: uuid }
+        grantVersion: { type: integer, minimum: 1 }
+      description: value=null 是缺测，不得自动当作 0。
+    LocalBehaviorSummary:
+      type: object
+      additionalProperties: false
+      required: [source, metric, unit, from, to, origin, points]
+      properties:
+        source: { type: string, enum: [watch_steps, phone_spending, app_usage] }
+        metric: { type: string, enum: [steps, total_spend, app_minutes] }
+        unit: { type: string, enum: [steps, CNY, minutes] }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        origin: { type: string, enum: [imported, synthetic] }
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/LocalSummaryPoint' }
+      description: 仅授权来源的日级摘要；真实连接器不能把图表样本伪装成 imported。
+    LocalDeletionTombstone:
+      type: object
+      additionalProperties: false
+      required: [entityId, entityKind, deletedAt, spaceRevision]
+      properties:
+        entityId: { type: string, format: uuid }
+        entityKind: { type: string, enum: [message, entry, observation, source_fact, source_summary] }
+        deletedAt: { type: string, format: date-time }
+        spaceRevision: { type: integer, minimum: 1 }
+      description: 无原话的删除墓碑，供离线设备合并时阻止旧资料复活。
+    LocalSyncDocument:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, spaceId, spaceRevision, messages, entries, questions, invitations, sourceGrants, deletionTombstones]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        spaceId: { type: string, format: uuid }
+        spaceRevision: { type: integer, minimum: 1 }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/LocalStoredMessage' }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/LocalJournalEntry' }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/LocalQuestion' }
+        invitations: { $ref: '#/components/schemas/LocalInvitationState' }
+        sourceGrants:
+          type: array
+          items: { $ref: '#/components/schemas/LocalSourceGrant' }
+        observations:
+          type: array
+          items: { $ref: '#/components/schemas/LocalObservation' }
+        titles:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/LocalDayTitle' }
+        behaviorSummaries:
+          type: array
+          items: { $ref: '#/components/schemas/LocalBehaviorSummary' }
+        deletionTombstones:
+          type: array
+          items: { $ref: '#/components/schemas/LocalDeletionTombstone' }
+      description: |
+        客户端加密前的本地格式；绝不作为远端 JSON 请求／响应正文。
+        Entry 是有效记录原话的唯一正文来源，StoredMessage 不复制该正文。
+        编辑事务更新 Entry、撤下旧引用与派生文案后才能生成同步快照；
+        删除移除 Entry 及关联 StoredMessage，只保留无正文墓碑。

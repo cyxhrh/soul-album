@@ -1,0 +1,34 @@
+@media print {
+  @page { size: A4 portrait; margin: 16mm; }
+  :root, body, #root { width: auto; min-width: 0; min-height: 0; margin: 0; background: white; }
+  .screen-only, .guided-header, .guided-conversation, .guided-album-tools,
+  .free-header, .free-left, .free-album-tools, .free-record-tools, .free-comparison,
+  .free-question-history, .free-bottom,
+  .guided-comparison, .guided-footnote, .story-evidence, .story-observation-actions { display: none !important; }
+  .guided-shell, .guided-grid, .guided-album-column,
+  .free-shell, .free-grid, .free-album-column { display: block; width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0; }
+  .print-page { display: block; width: 100%; min-height: 0; margin: 0; padding: 9mm 10mm 7mm 14mm;
+    border: 1px solid #c4cfc3; box-shadow: none; background: white; color: #24332e;
+    break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .print-page .story-page-spine { left: 8mm; }
+  .print-page .story-page-header { padding-bottom: 10px; }
+  .print-page .story-page-overline { margin-bottom: 11px; }
+  .print-page .story-page-header h2 { font-size: 29px; }
+  .print-page .story-page-content { padding: 12px 0; }
+  .print-page .story-entry-list { gap: 8px; }
+  .print-page .story-entry { padding: 9px 12px; background: #f7f4ed; break-inside: avoid; }
+  .print-page .story-entry blockquote { margin-bottom: 3px; font-size: 16px; line-height: 1.5; }
+  .print-page .story-entry-source, .print-page .story-observation-basis,
+  .print-page .story-observation-uncertain, .print-page .story-page-footer { font-size: 9pt; }
+  .print-page .story-sources { margin-top: 12px; padding-top: 10px; }
+  .print-page .story-sources .story-page-section-label { margin-bottom: 8px; }
+  .print-page .story-observation { margin-top: 12px; padding-top: 10px; break-inside: avoid; }
+  .print-page .story-observation-text { margin: 6px 0; font-size: 17px; }
+  .print-page .story-page-footer { margin-top: 4mm; }
+  .print-page .story-source-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .print-page .story-source-card { break-inside: avoid; padding: 6px; }
+  .print-page .story-source-card img { width: 32mm; height: 20mm; object-fit: cover; margin-bottom: 4px; }
+  .print-page .story-source-image-fallback { width: 32mm; height: 20mm; aspect-ratio: auto; margin-bottom: 4px; }
+  .print-page .story-source-card p { margin: 3px 0; }
+  .print-page .story-source-card small { font-size: 8pt; line-height: 1.35; }
+}
