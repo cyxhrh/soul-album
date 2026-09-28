@@ -41,6 +41,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
         <div className="story-page-date-row">
           <div>
             <p className="story-page-date">{dateForDay(album.day)}</p>
+            {mode === 'private' && <p className="story-page-overline">演示日期：{album.entries[0]?.occurredAt.slice(0, 10)}</p>}
             <h2>{album.titleRevision > 0 ? album.title : mode === 'private' ? '今天留下的原话' : '那天记下的事'}</h2>
           </div>
           <span className="story-page-private">仅自己可见<br />{mode === 'private' ? '只保留在本次页面' : '合成资料'}</span>
@@ -56,7 +57,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
               <p className="story-entry-kind">{(entryLabels?.[entry.id] ?? ['记录片段']).map((label) => <span key={label}>{label}</span>)}</p>
               <blockquote>“{entry.text}”</blockquote>
               <p className="story-entry-source">
-                来源：{entry.source} · 发生 {dateTime(entry.occurredAt)} · 记录 {dateTime(entry.recordedAt)}
+                来源：{entry.source} · {mode === 'private' ? '演示发生' : '发生'} {dateTime(entry.occurredAt)} · 记录 {dateTime(entry.recordedAt)}
                 {entry.revision > 1 && ` · 原话修订第 ${entry.revision} 版`}
               </p>
             </section>

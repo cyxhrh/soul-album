@@ -255,5 +255,5 @@ test('editing a quoted record withdraws its old wording from a skipped-question 
   await page.getByRole('button', { name: '保存修改' }).click()
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '对话' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(old)
-  await expect(page.getByRole('region', { name: '对话记录' })).toContainText('旧提问已撤下')
+  await expect(page.getByRole('region', { name: '对话记录' })).toContainText('引用已修订')
 })
