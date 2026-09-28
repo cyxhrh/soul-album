@@ -1,4 +1,4 @@
-# 心灵画册 · 产品前端 Demo
+# 心灵画册 · 产品 Demo 与本地后端核心
 
 “每天问一点，慢慢看见自己”。打开应用即进入对话：首页用气泡消息记录日常，画册翻看已有记录，生活数据页展示逐项开启的模拟图表。这个阶段先确认产品本身的交互与功能，暂不制作作品介绍页。
 
@@ -17,6 +17,14 @@ npm run dev
 
 打开终端输出的本地地址，通常为 `http://localhost:5173/`。无需账号或 API 密钥。`npm run build` 生成静态构建，`npm run preview` 可预览构建结果。
 
+本地领域服务的纯合成示例可运行：
+
+```bash
+npm run demo:backend
+```
+
+`backend/local/` 提供消息、日页、编辑删除、邀请节奏和逐来源许可的 TypeScript 领域能力；`backend/demo.ts` 在 Node 中演示一次记录及其修订、删除。`InMemorySpaceRepository` 只存进程内数据，退出即清空；它不是加密数据库，也没有账号、设备权限、云分析或同步能力。当前公开网页仍使用自己的页面内存规则 Demo，尚未调用这套新服务。前端接入须先把模拟日号和模拟授权替换为协议中的真实日期及独立许可状态，并继续验证不出站和删除清理。
+
 ## 体验路径
 
 1. **对话**：只有一个消息框。你可以直接回答，也可以随时发一条消息；输入“换个问题”或“今天先不聊了”可体验明确话语的本地规则演示，无需选择“回答／分享／跳过”模式。普通消息以气泡呈现并进入画册；明确的换题或结束话语保留在本次聊天中，不进入日页。演示日需要在“邀请节奏与演示日期”中显式推进，翻看旧记录不会推进时间。
@@ -25,7 +33,7 @@ npm run dev
 
 这一版不声称理解开放式话语的深层意图。有待答问题时，普通消息暂按本轮回应保存；若想在问题中途明确另记一件事，可说“随手记：下班时看到了晚霞”。只有少量明确的完整句子由本地规则识别；后续才由后端模型推断用户是在回答、主动分享、换题或暂时不想聊，并允许用户纠正。切换三个页面会保留当前会话与未发送草稿。阿禾合成剧情和独立节奏场景保留为旧演示入口 `?demo=story`、`?demo=rhythm`，与默认产品会话隔离。
 
-当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；这些真实数据接口尚未实现，页面也没有调用它们。受限的阿禾合成 AI 实验另见[独立接口契约](docs/contracts/ai-experiment.md)，同样尚未实现。
+当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；其中设备内领域协议已有部分 Node 实现，远端 HTTP 接口仍未实现，页面也没有调用它们。受限的阿禾合成 AI 实验另见[独立接口契约](docs/contracts/ai-experiment.md)，同样尚未实现。
 
 前端优化可直接修改 `src/features/` 与 `src/styles/`，保留单一对话输入、从有效记录派生画册、逐来源展示模拟数据的行为边界。接入后端前应先核对 API v1 的授权与数据删除约束；当前模拟开关不能直接当作系统权限或云端授权。
 
@@ -35,6 +43,7 @@ npm run dev
 npm run test
 npm run test:e2e
 npm run build
+npm run build:backend
 npm run lint
 ```
 

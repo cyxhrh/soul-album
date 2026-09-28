@@ -3,23 +3,30 @@ info:
   title: 心灵画册可选远端 API 与本地领域数据契约
   version: 1.0.0-draft
   description: |
-    设计契约，尚未部署。HTTP paths 仅用于用户另行授权的单次云分析及客户端密文同步。
+    设计契约，HTTP 服务尚未部署。HTTP paths 仅用于用户另行授权的单次云分析及客户端密文同步。
     消息、日页、邀请、来源授权与行为摘要的 Local* schema 是设备内领域服务的传输无关契约，
-    绝不意味着当前静态网页会向远端 POST 私人原话。当前 Demo 只有页面内存与合成数据。
+    绝不意味着当前静态网页会向远端 POST 私人原话。当前网页 Demo 只有页面内存与合成数据；
+    设备内 Local* 协议有部分 Node 内存实现，尚未接入网页或加密持久化。
 servers:
   - url: https://api.example.invalid
     description: 占位地址；不是可用服务，也不得作为前端默认请求目标。
 tags:
   - name: Optional cloud analysis
   - name: Optional encrypted sync
-x-implementation-status: future-contract-only
+x-implementation-status: local-node-memory-partial-http-future
 x-local-operations:
+  displayQuestion:
+    request: '#/components/schemas/LocalDisplayQuestionRequest'
+    response: '#/components/schemas/LocalQuestion'
   sendMessage:
     request: '#/components/schemas/LocalSendMessageRequest'
     response: '#/components/schemas/LocalSendMessageResult'
   correctInterpretation:
     request: '#/components/schemas/LocalCorrectInterpretationRequest'
     response: '#/components/schemas/LocalSendMessageResult'
+  deleteControlMessage:
+    request: '#/components/schemas/LocalDeleteControlMessageRequest'
+    response: '#/components/schemas/LocalDeleteControlMessageResult'
   listDays:
     response: '#/components/schemas/LocalDayList'
   getDay:
@@ -36,11 +43,20 @@ x-local-operations:
   markInvitationShown:
     request: '#/components/schemas/LocalInvitationEventRequest'
     response: '#/components/schemas/LocalInvitationState'
+  scheduleInvitation:
+    request: '#/components/schemas/LocalScheduleInvitationRequest'
+    response: '#/components/schemas/LocalInvitationState'
   settleInvitation:
     request: '#/components/schemas/LocalInvitationEventRequest'
     response: '#/components/schemas/LocalInvitationState'
   setCadence:
     request: '#/components/schemas/LocalSetCadenceRequest'
+    response: '#/components/schemas/LocalInvitationState'
+  pauseInvitations:
+    request: '#/components/schemas/LocalInvitationPauseRequest'
+    response: '#/components/schemas/LocalInvitationState'
+  resumeInvitations:
+    request: '#/components/schemas/LocalInvitationPauseRequest'
     response: '#/components/schemas/LocalInvitationState'
   grantSource:
     request: '#/components/schemas/LocalSourceGrantRequest'
@@ -506,9 +522,10 @@ components:
         revision: { type: integer, minimum: 1 }
         text: { type: string, minLength: 1 }
         provenance: { type: string, enum: [local_rule, on_device_model, cloud_model] }
-        status: { type: string, enum: [ready, citation_revised, citation_deleted] }
+        status: { type: string, enum: [ready, skipped, citation_revised, citation_deleted] }
         displayedAt: { type: string, format: date-time }
         answeredByMessageId: { type: [string, 'null'], format: uuid }
+        skippedByMessageId: { type: [string, 'null'], format: uuid }
         invitationId: { type: [string, 'null'], format: uuid }
         citations:
           type: array
@@ -519,6 +536,30 @@ components:
         已回答问句连同全部引用的 ID 与当时版本在同一事务保存；中性规则问题可以无引用。
         任一引用被编辑或删除，立即将整条问句 text 改成无私人原话的状态提示，
         并标记 citation_revised 或 citation_deleted；读取、同步与导出均不得返回旧题干。
+        明确跳题或结束本轮时标为 skipped，不允许之后的普通消息误答旧问题；
+        若用户纠正该条消息，可恢复并重新绑定。
+        删除回答会清除回答 ID 与原话，但保留已展示题目的安全结构与题数位置，
+        使当前邀请仍可按原定题数完成。
+    LocalDisplayQuestionRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, expectedSpaceRevision, kind, displayedAt, citations]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+        kind: { type: string, enum: [open, moment, reflection] }
+        displayedAt: { type: string, format: date-time }
+        invitationId: { type: [string, 'null'], format: uuid }
+        citations:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/LocalCitationRef' }
+      description: |
+        本地规则题干由服务按固定模板与已验证引用生成，调用方不能直接给 text。
+        open/moment 不带引用；reflection 必须带 1–3 条完整引用，引用变动即撤题。
+        绑定邀请时，展示日必须是邀请日；上一题需先回答或跳过，且不可超过
+        邀请创建时冻结的 questionTarget。
     LocalEntryCitationRef:
       type: object
       additionalProperties: false
@@ -620,10 +661,11 @@ components:
     LocalInvitation:
       type: object
       additionalProperties: false
-      required: [id, date, state, revision]
+      required: [id, date, questionTarget, state, revision]
       properties:
         id: { type: string, format: uuid }
         date: { type: string, format: date }
+        questionTarget: { type: integer, enum: [1, 2] }
         state: { type: string, enum: [scheduled, delivered, shown, settled_answered, settled_unanswered, cancelled] }
         revision: { type: integer, minimum: 1 }
         shownAt: { type: [string, 'null'], format: date-time }
@@ -634,7 +676,7 @@ components:
       required: [id, reason, previousCadence, nextCadence, decidedAt, effectiveDate, anchorDate, triggeringInvitationIds]
       properties:
         id: { type: string, format: uuid }
-        reason: { type: string, enum: [manual_choice, two_shown_rounds_unanswered, pause, resume] }
+        reason: { type: string, enum: [manual_choice, two_shown_rounds_unanswered, pause, resume, response_correction] }
         previousCadence: { type: string, enum: [daily, weekly, manual] }
         nextCadence: { type: string, enum: [daily, weekly, manual] }
         decidedAt: { type: string, format: date-time }
@@ -644,11 +686,20 @@ components:
           type: array
           maxItems: 2
           items: { type: string, format: uuid }
+        retractedAt: { type: [string, 'null'], format: date-time }
+        retractionDisposition:
+          type: string
+          enum: [cancelled_pending, annotated_effective]
       description: |
         用户可查看的节奏变更记录。自动降档仅在连续两个不同的已展示邀请日
         整轮未回答后产生，triggeringInvitationIds 包含该两轮；不自动升档。
-        手动改档次日生效，anchorDate 为生效日；自动降档次日生效，
-        anchorDate 为第二轮邀请日，以便周节奏从该日计算。
+        手动改档次日生效，anchorDate 为生效日；正常结算的自动降档在第二轮邀请日
+        次日生效，anchorDate 为第二轮邀请日。历史改判新触发的降档在纠正日次日
+        生效，并以纠正日为新锚点，避免追溯调度。用户后来纠正整轮结果时，
+        response_correction 记录纠正；被推翻的自动降档标记 retractedAt 与
+        retractionDisposition。cancelled_pending 表示未生效、可重新计算触发轮次；
+        annotated_effective 表示已生效，仅标注撤回且触发轮次永久视为已消费。
+        已生效的频率不自动升档，由用户手动调整。
     LocalInvitationState:
       type: object
       additionalProperties: false
@@ -692,7 +743,13 @@ components:
         timezone: { type: string, minLength: 1 }
         visibleQuestionId: { type: [string, 'null'], format: uuid }
         visibleInvitationId: { type: [string, 'null'], format: uuid }
-      description: UI 附带正在展示的问句／邀请上下文，但不让用户在发送前选择行为类型。
+        closeRound: { type: boolean, default: false }
+      description: |
+        UI 附带正在展示的问句／邀请上下文，但不让用户在发送前选择行为类型。
+        closeRound 仅由界面在整轮最后一题传入，服务核验消息绑定本轮最新题，
+        且本轮已展示邀请创建时冻结的每日两题或每周一题，
+        结算与消息同一事务；用户明确说结束本轮（decline）可提前结算。
+        中途回答时保持邀请 shown，随后可继续问下一题。
     LocalSendMessageResult:
       type: object
       additionalProperties: false
@@ -725,6 +782,20 @@ components:
         correctedKind:
           type: string
           enum: [answer, proactive_record, skip, decline, request_more, uncertain]
+    LocalDeleteControlMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, messageId, expectedMessageRevision]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        messageId: { type: string, format: uuid }
+        expectedMessageRevision: { type: integer, minimum: 1 }
+    LocalDeleteControlMessageResult:
+      type: object
+      additionalProperties: false
+      required: [spaceRevision]
+      properties:
+        spaceRevision: { type: integer, minimum: 1 }
     LocalEditEntryRequest:
       type: object
       additionalProperties: false
@@ -782,7 +853,27 @@ components:
         event: { type: string, enum: [delivered, shown, settled_answered, settled_unanswered, cancelled] }
         occurredAt: { type: string, format: date-time }
         expectedRevision: { type: integer, minimum: 1 }
-      description: shown 必须对应实际呈现；只在 shown 后允许 settle，重试幂等。
+      description: |
+        shown 必须对应实际呈现；当前 Node 适配器实现 shown 与 settled_*，重试幂等。
+        独立结算需至少已展示本轮首题；无回应或尚未展示全部题的被动结算，
+        必须在本地邀请日结束后。用户明确说结束由 sendMessage 同事务提前结算。
+    LocalScheduleInvitationRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, expectedSpaceRevision, date]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+        date: { type: string, format: date }
+    LocalInvitationPauseRequest:
+      type: object
+      additionalProperties: false
+      required: [clientOperationId, expectedSpaceRevision, requestedAt, timezone]
+      properties:
+        clientOperationId: { type: string, format: uuid }
+        expectedSpaceRevision: { type: integer, minimum: 0 }
+        requestedAt: { type: string, format: date-time }
+        timezone: { type: string, minLength: 1 }
     LocalSourceGrantRequest:
       type: object
       additionalProperties: false
@@ -883,11 +974,12 @@ components:
     LocalSyncDocument:
       type: object
       additionalProperties: false
-      required: [schemaVersion, spaceId, spaceRevision, messages, entries, questions, invitations, sourceGrants, deletionTombstones]
+      required: [schemaVersion, spaceId, spaceRevision, nextMessageSequence, messages, entries, questions, invitations, sourceGrants, deletionTombstones]
       properties:
         schemaVersion: { type: integer, const: 1 }
         spaceId: { type: string, format: uuid }
         spaceRevision: { type: integer, minimum: 1 }
+        nextMessageSequence: { type: integer, minimum: 1 }
         messages:
           type: array
           items: { $ref: '#/components/schemas/LocalStoredMessage' }
