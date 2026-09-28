@@ -194,10 +194,12 @@ function invalidateDependencies(
 
 /** Transport-independent local core. This memory adapter is not encrypted persistence. */
 export class LocalJournalService {
+  private readonly repository: SpaceRepository
   private readonly now: Now
   private readonly newId: NewId
 
-  constructor(private readonly repository: SpaceRepository, dependencies: Dependencies = {}) {
+  constructor(repository: SpaceRepository, dependencies: Dependencies = {}) {
+    this.repository = repository
     this.now = dependencies.now ?? (() => new Date().toISOString())
     this.newId = dependencies.newId ?? (() => globalThis.crypto.randomUUID())
   }
@@ -245,7 +247,11 @@ export class LocalJournalService {
       }
       const text = request.kind === 'open' ? '今天有什么想记下的？'
         : request.kind === 'moment' ? '今天有没有一个小瞬间想留在画册里？'
-          : `你之前提到${citedTexts.map((item) => `“${item}”`).join('、')}。今天有什么不同？`
+          : request.citations.length === 1 && request.citations[0].kind === 'entry'
+            ? `你之前说“${citedTexts[0]}”。今天有什么想记下的？`
+            : request.citations.length === 1 && request.citations[0].kind === 'observation'
+              ? `你补充说“${citedTexts[0]}”。今天还有什么想记下的？`
+              : `你之前提到${citedTexts.map((item) => `“${item}”`).join('、')}。今天有什么不同？`
       const question: Question = {
         id: this.newId(), revision: 1, text,
         provenance: 'local_rule', status: 'ready', displayedAt: request.displayedAt,

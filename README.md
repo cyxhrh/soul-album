@@ -4,7 +4,7 @@
 
 在线体验：[GitHub Pages 前端 Demo](https://cyxhrh.github.io/soul-album/)；队友可从[公开源码仓库](https://github.com/cyxhrh/soul-album)获取代码。
 
-这是可在手机和电脑浏览器中操作的**前端规则 Demo**。问题由本地规则生成，手表步数、手机消费记录和应用时长都是固定演示数据及模拟授权；没有真实 AI、设备连接、账号、跨设备同步或长期保存。输入的原话、草稿和开关状态只在当前页面内存中，刷新、关闭或点“清除”后消失。请不要把它当作正式日记存储。
+这是可在手机和电脑浏览器中操作的**本地内存 Demo**。默认对话与画册共用 `backend/local/` 的记录领域服务，经浏览器适配层在当前页面内存中运行；问题仍由本地规则生成，手表步数、手机消费记录和应用时长仍是固定演示数据及模拟授权。没有真实 AI、设备连接、账号、跨设备同步、加密存储或长期保存。输入的原话、草稿和开关状态只在当前页面内存中，刷新、关闭或点“清除”后消失。请不要把它当作正式日记存储。
 
 ## 运行
 
@@ -23,7 +23,7 @@ npm run dev
 npm run demo:backend
 ```
 
-`backend/local/` 提供消息、日页、编辑删除、邀请节奏和逐来源许可的 TypeScript 领域能力；`backend/demo.ts` 在 Node 中演示一次记录及其修订、删除。`InMemorySpaceRepository` 只存进程内数据，退出即清空；它不是加密数据库，也没有账号、设备权限、云分析或同步能力。当前公开网页仍使用自己的页面内存规则 Demo，尚未调用这套新服务。前端接入须先把模拟日号和模拟授权替换为协议中的真实日期及独立许可状态，并继续验证不出站和删除清理。
+`backend/local/` 提供消息、日页、编辑删除、邀请节奏和逐来源许可的 TypeScript 领域能力；`backend/demo.ts` 在 Node 中演示一次记录及其修订、删除。默认网页通过 `src/domain/browserLocalSession.ts` 调用其中的消息与日页服务，并把演示日期映射成领域服务需要的日期。`InMemorySpaceRepository` 只存当前页面或 Node 进程内数据，退出即清空；它不是加密数据库。网页的邀请节奏与生活数据授权仍由独立演示规则驱动，没有账号、真实设备权限、云分析或同步能力。
 
 ## 体验路径
 
@@ -33,7 +33,7 @@ npm run demo:backend
 
 这一版不声称理解开放式话语的深层意图。有待答问题时，普通消息暂按本轮回应保存；若想在问题中途明确另记一件事，可说“随手记：下班时看到了晚霞”。只有少量明确的完整句子由本地规则识别；后续才由后端模型推断用户是在回答、主动分享、换题或暂时不想聊，并允许用户纠正。切换三个页面会保留当前会话与未发送草稿。阿禾合成剧情和独立节奏场景保留为旧演示入口 `?demo=story`、`?demo=rhythm`，与默认产品会话隔离。
 
-当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；其中设备内领域协议已有部分 Node 实现，远端 HTTP 接口仍未实现，页面也没有调用它们。受限的阿禾合成 AI 实验另见[独立接口契约](docs/contracts/ai-experiment.md)，同样尚未实现。
+当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；其中设备内记录与日页协议已有浏览器内存实现，远端 HTTP 接口仍未实现。受限的阿禾合成 AI 实验另见[独立接口契约](docs/contracts/ai-experiment.md)，同样尚未实现。
 
 前端优化可直接修改 `src/features/` 与 `src/styles/`，保留单一对话输入、从有效记录派生画册、逐来源展示模拟数据的行为边界。接入后端前应先核对 API v1 的授权与数据删除约束；当前模拟开关不能直接当作系统权限或云端授权。
 

@@ -6,14 +6,14 @@ info:
     设计契约，HTTP 服务尚未部署。HTTP paths 仅用于用户另行授权的单次云分析及客户端密文同步。
     消息、日页、邀请、来源授权与行为摘要的 Local* schema 是设备内领域服务的传输无关契约，
     绝不意味着当前静态网页会向远端 POST 私人原话。当前网页 Demo 只有页面内存与合成数据；
-    设备内 Local* 协议有部分 Node 内存实现，尚未接入网页或加密持久化。
+    Local* 记录与日页协议已在浏览器内存和 Node 内存运行，尚未接入加密持久化。
 servers:
   - url: https://api.example.invalid
     description: 占位地址；不是可用服务，也不得作为前端默认请求目标。
 tags:
   - name: Optional cloud analysis
   - name: Optional encrypted sync
-x-implementation-status: local-node-memory-partial-http-future
+x-implementation-status: local-browser-and-node-memory-partial-http-future
 x-local-operations:
   displayQuestion:
     request: '#/components/schemas/LocalDisplayQuestionRequest'

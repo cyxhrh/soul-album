@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { journalDate } from './date.js'
 import { LocalDomainError } from './errors.js'
@@ -11,6 +12,20 @@ function operation(number: number): string {
 }
 
 describe('InMemorySpaceRepository', () => {
+  it('stores the Node-compatible SHA-256 digest of a UTF-8 request without retaining its words', () => {
+    const repository = new InMemorySpaceRepository()
+    repository.createSpace(SPACE_A, 'Asia/Shanghai')
+    const fingerprint = '中文和 emoji 🙂\nwith a second line'
+    repository.transact(SPACE_A, {
+      clientOperationId: operation(1), fingerprint, expectedSpaceRevision: 0,
+    }, () => 'safe receipt')
+
+    const receipts = Reflect.get(repository, 'operations') as Map<string, Map<string, unknown>>
+    const receipt = receipts.get(SPACE_A)?.get(operation(1)) as { fingerprintSha256: string }
+    expect(receipt.fingerprintSha256).toBe(createHash('sha256').update(fingerprint, 'utf8').digest('hex'))
+    expect(JSON.stringify([...receipts.get(SPACE_A)!.entries()])).not.toContain(fingerprint)
+  })
+
   it('rejects identifiers that could smuggle private words into repository keys', () => {
     const repository = new InMemorySpaceRepository()
     expect(() => repository.createSpace('private-space-秘密原话', 'Asia/Shanghai')).toThrowError('invalid_input')

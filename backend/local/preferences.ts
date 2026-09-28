@@ -62,7 +62,11 @@ function requireTimezone(requested: string, stored: string): void {
 }
 
 export class LocalPreferencesService {
-  constructor(private readonly repository: InMemorySpaceRepository) {}
+  private readonly repository: InMemorySpaceRepository
+
+  constructor(repository: InMemorySpaceRepository) {
+    this.repository = repository
+  }
 
   scheduleInvitation(spaceId: string, request: ScheduleInvitationRequest): InvitationState {
     return this.repository.transact(spaceId, {

@@ -146,6 +146,38 @@ test('deleting day one withdraws a later title copied from its answer and remove
   await expect(page.locator('.print-page:visible')).not.toContainText(secret)
 })
 
+for (const action of ['修改', '删除'] as const) {
+  test(`${action} a title source closes the stale title draft before it can be saved`, async ({ page }) => {
+    const secret = `PRIVATE_STALE_TITLE_${action}_山茶花`
+    await openProduct(page)
+    await answer(page, secret)
+    await answer(page, '同一天还留下一句。')
+    await album(page)
+    await page.getByRole('button', { name: '修改日页标题' }).click()
+    await page.getByRole('textbox', { name: '日页标题' }).fill('旧标题 ' + secret)
+    await page.getByRole('button', { name: '保存标题' }).click()
+    await page.getByRole('button', { name: '修改日页标题' }).click()
+    await expect(page.getByRole('textbox', { name: '日页标题' })).toHaveValue('旧标题 ' + secret)
+
+    if (action === '修改') {
+      await page.getByRole('button', { name: '修改这条原话' }).first().click()
+      await page.getByRole('textbox', { name: '修改原话' }).fill('已经改正的第一句。')
+      await page.getByRole('button', { name: '保存修改' }).click()
+    } else {
+      await page.getByRole('button', { name: '删除这条原话' }).first().click()
+    }
+    const confirmation = page.getByRole('dialog', { name: '确认撤下日页标题' })
+    await confirmation.getByRole('button', { name: `继续${action}` }).click()
+
+    await expect(page.getByRole('textbox', { name: '日页标题' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '保存标题' })).toHaveCount(0)
+    await expect(page.getByRole('article', { name: '第 1 天画册页' })).not.toContainText(secret)
+    await page.getByRole('button', { name: '修改日页标题' }).click()
+    await expect(page.getByRole('textbox', { name: '日页标题' })).toHaveValue('')
+    await expect(page.getByRole('button', { name: '保存标题' })).toBeDisabled()
+  })
+}
+
 test('title withdrawal traps focus and restores it on Escape', async ({ page }) => {
   await openProduct(page)
   await answer(page, '第一天的原话。')
@@ -274,6 +306,9 @@ test('a recorded entry shows the reader local hour', async ({ page }) => {
   await album(page)
   const recorded = await page.getByRole('article', { name: '第 1 天画册页' }).innerText()
   expect(recorded).toMatch(new RegExp('发生 \\d{4}年\\d+月\\d+日 ' + localHour + ':'))
+  expect(recorded).toContain('演示日期：')
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.locator('.print-page:visible')).toContainText('演示日期：')
 })
 
 test('an unfinished message draft persists across tabs and explicit day advance without auto-saving', async ({ page }) => {

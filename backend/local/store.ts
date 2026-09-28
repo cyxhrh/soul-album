@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto'
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import type { SpaceSnapshot } from './types.js'
 import { journalDate } from './date.js'
 import { LocalDomainError } from './errors.js'
@@ -84,11 +85,14 @@ export interface SpaceRepository {
 }
 
 export class InMemorySpaceRepository implements SpaceRepository {
+  private readonly dependencies: RepositoryDependencies
   private readonly spaces = new Map<string, SpaceSnapshot>()
   private readonly operations = new Map<string, Map<string, CommittedOperation>>()
   private readonly activeSpaces = new Set<string>()
 
-  constructor(private readonly dependencies: RepositoryDependencies = {}) {}
+  constructor(dependencies: RepositoryDependencies = {}) {
+    this.dependencies = dependencies
+  }
 
   now(): string {
     return this.dependencies.now?.() ?? new Date().toISOString()
@@ -133,7 +137,7 @@ export class InMemorySpaceRepository implements SpaceRepository {
     const operationKey = uuidKey(key.clientOperationId)
     if (typeof key.fingerprint !== 'string' || !key.fingerprint || !Number.isInteger(key.expectedSpaceRevision) ||
       key.expectedSpaceRevision < 0) throw new LocalDomainError('invalid_input')
-    const fingerprintSha256 = createHash('sha256').update(key.fingerprint, 'utf8').digest('hex')
+    const fingerprintSha256 = bytesToHex(sha256(new TextEncoder().encode(key.fingerprint)))
     const committed = this.operations.get(spaceKey)?.get(operationKey)
     if (committed) {
       if (committed.fingerprintSha256 !== fingerprintSha256) {

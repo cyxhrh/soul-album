@@ -90,6 +90,17 @@ describe('local journal service', () => {
     expect(service.getDay(spaceId, '2026-09-28')).toBeNull()
   })
 
+  it('asks an entry-based reflection in the established gentle wording', () => {
+    const { service } = setup()
+    const saved = service.sendMessage(spaceId, sendRequest(97, 0, '窗台上的蓝杯子'))
+    const question = service.displayQuestion(spaceId, {
+      clientOperationId: id(98), expectedSpaceRevision: 1,
+      kind: 'reflection', displayedAt: '2026-09-29T08:01:00+08:00',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    expect(question.text).toBe('你之前说“窗台上的蓝杯子”。今天有什么想记下的？')
+  })
+
   it('redacts dependent questions and titles when an entry changes, then scrubs deletion', () => {
     const { repository, service } = setup()
     const first = service.sendMessage(spaceId, sendRequest(8, 0, '秘密旧句。'))
