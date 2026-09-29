@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+*.dpapi
+*.credential
 test-results
 playwright-report
 .playwright-cli/

@@ -1,7 +1,8 @@
 import { resolve } from 'node:path'
 import { createSyntheticQuestionServer } from './http.js'
 import {
-  createQwenPrivateQuestionProviderFromEnv, createQwenProviderFromEnv,
+  createQwenPrivateChatProviderFromEnv, createQwenPrivateQuestionProviderFromEnv,
+  createQwenProviderFromEnv,
 } from './qwen.js'
 import { maxCallsFromEnv } from './config.js'
 
@@ -18,6 +19,10 @@ const server = createSyntheticQuestionServer({
   privateAiEnabled: process.env.SOUL_ALBUM_PRIVATE_AI_ENABLED === '1',
   privateProvider: process.env.SOUL_ALBUM_PRIVATE_AI_ENABLED === '1'
     ? createQwenPrivateQuestionProviderFromEnv()
+    : undefined,
+  privateChatEnabled: process.env.SOUL_ALBUM_PRIVATE_CHAT_ENABLED === '1',
+  privateChatProvider: process.env.SOUL_ALBUM_PRIVATE_CHAT_ENABLED === '1'
+    ? createQwenPrivateChatProviderFromEnv()
     : undefined,
   maxCalls: maxCallsFromEnv(process.env.SOUL_ALBUM_AI_MAX_CALLS),
   distDir: resolve(process.cwd(), 'dist'),

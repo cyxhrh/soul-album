@@ -153,9 +153,15 @@ describe('restricted synthetic model endpoint', () => {
     }
     const { url } = await serve(model)
     const local = await post(url, '{"scenario":"ahe"}', 'application/json', {
-      Origin: 'http://127.0.0.1:5175',
+      Origin: new URL(url).origin,
     })
     expect(local.response.status).toBe(200)
+
+    const otherLocalPort = await post(url, '{"scenario":"ahe"}', 'application/json', {
+      Origin: 'http://localhost:9999',
+    })
+    expect(otherLocalPort.response.status).toBe(400)
+    expect(otherLocalPort.data.code).toBe('invalid_request')
 
     const foreignOrigin = await post(url, '{"scenario":"ahe"}', 'application/json', {
       Origin: 'https://untrusted.example',

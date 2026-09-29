@@ -49,6 +49,10 @@
 .product-content { flex: 1; min-width: 0; }
 .product-status { max-width: 850px; margin: 12px auto 0; }
 .product-chat { display: flex; flex-direction: column; width: min(100%, 850px); height: min(860px, calc(100dvh - 168px)); min-height: 440px; margin: 0 auto; }
+.product-chat-modes { display: flex; align-items: center; gap: 7px; padding: 10px clamp(20px, 3vw, 42px); border-bottom: 1px solid var(--edge); }
+.product-chat-modes button { min-height: 34px; padding: 6px 12px; border: 1px solid #b8caba; border-radius: 7px; background: #fffdf8; color: #40634e; cursor: pointer; font-size: 12px; }
+.product-chat-modes button[aria-pressed="true"] { border-color: #416f58; background: #416f58; color: #fff; font-weight: 700; }
+.product-chat-modes span { margin-left: auto; color: var(--muted); font-size: 11px; text-align: right; }
 .product-chat-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px clamp(20px, 3vw, 42px) 25px; overscroll-behavior: contain; }
 .product-day-divider { position: relative; margin: 11px 0 25px; color: #7e8c80; text-align: center; font-size: 11px; }
 .product-day-divider::before { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: #dfdfd4; }
@@ -65,6 +69,9 @@
 .product-bubble small, .product-bubble time { display: block; color: #71847a; font-size: 10px; line-height: 1.5; }
 .product-bubble time { margin-top: 5px; text-align: right; }
 .product-bubble-row.current .product-bubble { border-color: #bed4c4; }
+.product-ai-reply { border-color: #aac7b1; background: #edf5ec; }
+.product-ai-reply .product-ai-followup { margin-top: 10px; color: #2e5c46; }
+.product-ai-reply pre { max-height: 180px; overflow: auto; margin: 7px 0 0; padding: 8px; border-radius: 5px; background: #f8fbf5; color: var(--ink); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .product-question-action { display: block; margin-top: 9px; padding: 3px 0; border: 0; background: transparent; color: #376c53; cursor: pointer; text-align: left; font: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
 .product-question-evidence { margin-top: 8px; color: #516f5c; font-size: 11px; }
 .product-question-evidence summary { cursor: pointer; }
@@ -83,6 +90,16 @@
 .product-private-dialog summary { cursor: pointer; font-size: 11px; }
 .product-private-dialog pre { overflow-x: auto; padding: 10px; background: #eef2eb; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10px; }
 .product-private-dialog .free-print-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.product-chat-dialog { max-height: min(92dvh, 860px); overflow-y: auto; }
+.product-chat-dialog .product-chat-context { min-width: 0; margin: 14px 0; padding: 9px 11px; border: 1px solid #cbd8ca; border-radius: 7px; }
+.product-chat-dialog .product-chat-context legend { padding: 0 5px; color: var(--muted); font-size: 12px; }
+.product-chat-dialog .product-chat-context label, .product-chat-dialog .product-chat-preceding { display: flex; align-items: flex-start; gap: 8px; margin: 7px 0; font-weight: 400; line-height: 1.55; }
+.product-chat-dialog .product-chat-context input, .product-chat-dialog .product-chat-preceding input { flex: none; margin-top: 3px; }
+.product-chat-dialog .product-chat-context span, .product-chat-dialog .product-chat-preceding span { min-width: 0; overflow-wrap: anywhere; }
+.product-chat-dialog .product-chat-payload-heading { display: block; margin-top: 12px; font-size: 12px; }
+.product-chat-dialog .product-chat-payload { max-height: 210px; overflow: auto; margin: 6px 0 15px; padding: 11px; border-radius: 6px; background: #eef2eb; color: var(--ink); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.product-chat-dialog .free-print-actions { position: sticky; z-index: 1; bottom: -26px; flex-wrap: nowrap; margin: 12px -26px -26px; padding: 12px 18px; border-top: 1px solid var(--edge); background: var(--leaf); }
+.product-chat-dialog .free-print-actions button { flex: 1; min-width: 0; padding: 7px 8px; font-size: 12px; }
 .product-rest { max-width: 410px; margin: 4px auto 0; padding: 14px 18px; border: 1px solid #d9e3d8; border-radius: 10px; background: #f2f6ef; text-align: center; }
 .product-rest strong { font-size: 12px; }
 .product-rest p { margin: 7px 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
@@ -138,6 +155,8 @@
   .product-header-meta { font-size: 10px; }
   .product-header-meta span:nth-child(2) { display: none; }
   .product-chat { height: calc(100dvh - 146px - env(safe-area-inset-bottom)); min-height: 340px; }
+  .product-chat-modes { padding: 8px 14px; }
+  .product-chat-modes span { display: none; }
   .product-chat-scroll { padding: 9px 18px 16px; }
   .product-thread { margin-left: 6px; }
   .product-bubble { max-width: 83%; }
