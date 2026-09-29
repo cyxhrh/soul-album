@@ -1,6 +1,6 @@
 # 心灵画册架构与前后端协议 v1
 
-**状态：默认对话与画册已经接入设备内领域服务的浏览器内存适配层。** `src/features/free/FreeTrial.tsx` 在 React 内存中组合三页；`src/domain/browserLocalSession.ts` 调用 `backend/local/` 记录和日页服务，并将结果投影给界面。`src/domain/invitations.ts` 仍处理演示邀请，`DataInsights.tsx` 的三项图表仍是固定合成数值与模拟开关。刷新或清除即丢失自由输入。本文和 [OpenAPI 3.1 契约](../contracts/api-v1.yaml)为后续开发及队友优化前端提供共同边界，**不表示账号、设备读取、云接口或安全持久化已经实现**。阿禾的[合成 AI 实验契约](../contracts/ai-experiment.md)是另一条仅使用合成资料的实验路径，不可当作私人消息的云处理授权。
+**状态：默认对话与画册已经接入设备内领域服务的浏览器内存适配层。** `src/features/free/FreeTrial.tsx` 在 React 内存中组合三页；`src/domain/browserLocalSession.ts` 调用 `backend/local/` 记录和日页服务，并将结果投影给界面。`src/domain/invitations.ts` 仍处理演示邀请，`DataInsights.tsx` 的三项图表仍是固定合成数值与模拟开关。刷新或清除即丢失自由输入。本文和 [OpenAPI 3.1 契约](../contracts/api-v1.yaml)为后续开发及队友优化前端提供共同边界，**不表示账号、设备读取、私人内容云分析或安全持久化已经实现**。阿禾的[合成 AI 实验契约](../contracts/ai-experiment.md)是另一条仅使用固定合成资料的接口路径；本地服务与页面已接线，真实模型调用尚未验证，也不可当作私人消息的云处理授权。
 
 ## 1. 架构决定
 
@@ -54,6 +54,8 @@ flowchart LR
 ## 3. 可选远端 API
 
 OpenAPI 的 HTTP 路径只对应两类**未来可选**远端服务：
+
+另有独立的 `POST /api/ai/synthetic-question` 合成实验端点，严格只接受 `{ "scenario": "ahe" }`；服务端使用固定版本合成资料。它不实现本节私人片段的单次授权分析协议，不能用它发送评委自由输入。无 Key 或地域匹配的模型地址时明确返回未配置，不生成假成功响应。
 
 1. `POST /v1/analysis/proposals`：客户端先预览本次要离开设备的完整消息与选定旧片段、目的及模型提供方，内容变更即重新同意。请求只带这些最小片段、ID／版本、一次性许可收据与幂等键；服务端校验收据绑定的内容摘要，不写正文日志，不把未授权来源加进 Prompt。响应是 `proposal`，不是已经写入日记的事实；引用须匹配当前版本。断网或拒绝时**不发请求**，本地规则照常运行。服务器不能仅凭收据证明真人真的看过预览，客户端的隐私门还需要 UI 和网络测试验证。
 2. `GET/PUT /v1/sync/envelopes/current`：用户另行开启账号同步，客户端先加密完整本地状态，服务器只收密文包和必要版本元数据。同步许可不允许服务器解密或调用模型。用 `ETag`／`If-Match` 防止覆盖其他设备的新版本；冲突下载后在客户端解密合并或请用户处理，不使用静默最后写入覆盖。设备配对、恢复密钥与账户服务属于落地前的独立设计／审计内容。

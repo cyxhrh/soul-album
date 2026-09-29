@@ -46,13 +46,27 @@ describe('derived album views', () => {
   it('offers a pending second question from the first same-day answer and keeps the answered snapshot separate', () => {
     let state = answer(createJournalState('free'), 'e1', 1, '今天见了朋友', 'memory')
     expect(selectRuleQuestion(state, 1)).toMatchObject({ citationEntryId: 'e1', status: 'ready' })
-    expect(selectRuleQuestion(state, 1).text).toContain('今天见了朋友')
+    expect(selectRuleQuestion(state, 1).text).toBe('关于这段记录，还有什么想补充的吗？')
+    expect(selectRuleQuestion(state, 1).text).not.toContain('今天见了朋友')
     expect(selectAnsweredQuestions(state, 1)).toHaveLength(1)
     expect(selectAnsweredQuestions(state, 1)[0].text).toBe('今天有什么想记下的？')
 
     state = answer(state, 'e2', 1, '返程很晚', 'rest')
     expect(selectAnsweredQuestions(state, 1)).toHaveLength(2)
-    expect(selectAnsweredQuestions(state, 1)[1].text).toContain('今天见了朋友')
+    expect(selectAnsweredQuestions(state, 1)[1].text).toBe('关于这段记录，还有什么想补充的吗？')
+  })
+
+  it('varies cited rule questions across consecutive prompts and days', () => {
+    let state = answer(createJournalState('free'), 'e1', 1, '今天去了河边，看到夕阳，很开心。')
+    const dayOneSecond = selectRuleQuestion(state, 1)
+    state = answer(state, 'e2', 1, '还看见了晚风里的树叶。')
+    const dayTwoFirst = selectRuleQuestion(state, 2)
+    state = answer(state, 'e3', 2, '今天走了一段路。')
+    const dayTwoSecond = selectRuleQuestion(state, 2)
+
+    expect(new Set([dayOneSecond.text, dayTwoFirst.text, dayTwoSecond.text]).size).toBe(3)
+    expect([dayOneSecond, dayTwoFirst, dayTwoSecond].every((question) => question.citationEntryId)).toBe(true)
+    expect([dayOneSecond.text, dayTwoFirst.text, dayTwoSecond.text].join('')).not.toContain('今天去了河边')
   })
 
   it('shows only one current tentative observation with its evidence and no inferred mood', () => {
@@ -102,31 +116,39 @@ describe('derived album views', () => {
       },
     })
     state = journalReducer(state, { type: 'correctObservation', id: 'o1', text: '其实是返程太晚' })
-    expect(selectRuleQuestion(state, 2).text).toContain('其实是返程太晚')
+    expect(selectRuleQuestion(state, 2)).toMatchObject({
+      citationObservationId: 'o1', citationObservationRevision: 2,
+      text: '关于你补充的内容，还有什么想说的吗？',
+    })
     state = journalReducer(state, { type: 'editEntry', id: 'e1', text: '当天只是睡得晚', recordedAt: 'later' })
 
     expect(selectAlbum(state, 1)?.observation).toBeNull()
+    expect(selectRuleQuestion(state, 2).citationObservationId).toBeUndefined()
     expect(selectRuleQuestion(state, 2).text).not.toContain('其实是返程太晚')
   })
 
   it('updates an unanswered question when an old answer is edited, but marks an answered version revised', () => {
     let state = answer(createJournalState('free'), 'e1', 1, '旧原话')
-    expect(selectRuleQuestion(state, 2).text).toContain('旧原话')
+    expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'e1', citationEntryRevision: 1 })
+    expect(selectRuleQuestion(state, 2).text).not.toContain('旧原话')
     state = journalReducer(state, { type: 'editEntry', id: 'e1', text: '新原话', recordedAt: 'later' })
-    expect(selectRuleQuestion(state, 2).text).toContain('新原话')
+    expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'e1', citationEntryRevision: 2 })
+    expect(selectRuleQuestion(state, 2).text).not.toContain('新原话')
     expect(selectRuleQuestion(state, 2).text).not.toContain('旧原话')
 
     state = answer(state, 'e2', 2, '第二天的回答')
     state = journalReducer(state, { type: 'editEntry', id: 'e1', text: '再改一次', recordedAt: 'latest' })
     expect(selectAnsweredQuestions(state, 2)[0]).toMatchObject({ status: 'reference-revised' })
-    expect(selectAnsweredQuestions(state, 2)[0].text).toContain('新原话')
+    expect(selectAnsweredQuestions(state, 2)[0].text).toBe('关于这段记录，还有什么想补充的吗？')
+    expect(selectAnsweredQuestions(state, 2)[0].text).not.toContain('新原话')
   })
 
   it('uses the latest earlier day rather than insertion order for a new question', () => {
     let state = answer(createJournalState('story'), 'e3', 3, '第三天记录')
     state = answer(state, 'e1', 1, '第一天补录')
 
-    expect(selectRuleQuestion(state, 4).text).toContain('第三天记录')
+    expect(selectRuleQuestion(state, 4)).toMatchObject({ citationEntryId: 'e3', citationEntryRevision: 1 })
+    expect(selectRuleQuestion(state, 4).text).not.toContain('第三天记录')
     expect(selectRuleQuestion(state, 4).text).not.toContain('第一天补录')
   })
 
@@ -135,13 +157,15 @@ describe('derived album views', () => {
     state = answer(state, 'other', 1, '第二题原话', 'rest')
     expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'main' })
     state = journalReducer(state, { type: 'editEntry', id: 'other', text: '第二题改写', recordedAt: 'later' })
-    expect(selectRuleQuestion(state, 2).text).toContain('第一题原话')
+    expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'main', citationEntryRevision: 1 })
     state = journalReducer(state, { type: 'editEntry', id: 'main', text: '第一题改写', recordedAt: 'later' })
     expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'main' })
-    expect(selectRuleQuestion(state, 2).text).toContain('第一题改写')
+    expect(selectRuleQuestion(state, 2)).toMatchObject({ citationEntryId: 'main', citationEntryRevision: 2 })
+    expect(selectRuleQuestion(state, 2).text).not.toContain('第一题改写')
 
     expect(selectRuleQuestion(state, 2, 'other')).toMatchObject({ citationEntryId: 'other' })
-    expect(selectRuleQuestion(state, 2, 'other').text).toContain('第二题改写')
+    expect(selectRuleQuestion(state, 2, 'other')).toMatchObject({ citationEntryId: 'other', citationEntryRevision: 2 })
+    expect(selectRuleQuestion(state, 2, 'other').text).not.toContain('第二题改写')
   })
 
   it('compares only answers to the same topic and tracks active edits', () => {

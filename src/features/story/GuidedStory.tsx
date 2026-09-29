@@ -114,6 +114,9 @@ export default function GuidedStory({ onBack, onEnterFreeTrial }: GuidedStoryPro
               <span className="guided-question-progress">剧情结束 · 轮到你</span>
               <h2>从自己的第一天开始</h2>
               <p>自由区从空白开始，采用规则提问；阿禾的合成记录不会带入。</p>
+              <a className="guided-secondary" href={`${import.meta.env.BASE_URL}?demo=ai`}>
+                试一次阿禾合成 AI 实验 →
+              </a>
               <button type="button" className="guided-primary" onClick={onEnterFreeTrial}>
                 进入自由每日问答 <span aria-hidden="true">→</span>
               </button>
@@ -173,7 +176,7 @@ export default function GuidedStory({ onBack, onEnterFreeTrial }: GuidedStoryPro
           </div>
         </section>
       )}
-      <p className="guided-footnote screen-only">本页仅使用合成记录和浏览器内存中的交互状态；真实 AI 与设备接入属于下一阶段。</p>
+      <p className="guided-footnote screen-only">本页仅使用合成记录和浏览器内存中的交互状态；独立合成 AI 实验需实际调用成功才算模型结果，设备尚未接入。</p>
     </main>
   )
 }
