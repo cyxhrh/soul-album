@@ -21,6 +21,28 @@ try {
     throw 'Run npm run build:server in a terminal without the API key first.'
   }
 
+  Remove-Item Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue
+  $targetUri = [Uri]$selectedBaseUrl
+  if ($targetUri.Scheme -ne 'https') { throw 'The Model Studio base URL must use HTTPS.' }
+  $systemProxy = [Net.WebRequest]::DefaultWebProxy
+  if ($systemProxy) {
+    $proxyUri = $systemProxy.GetProxy($targetUri)
+    if ($proxyUri -and $proxyUri.AbsoluteUri -ne $targetUri.AbsoluteUri) {
+      if ($proxyUri.Scheme -notin @('http', 'https')) {
+        throw 'The system HTTPS proxy has an unsupported scheme.'
+      }
+      $env:SOUL_ALBUM_QWEN_HTTPS_PROXY = $proxyUri.AbsoluteUri
+    }
+  }
+  if ($env:SOUL_ALBUM_QWEN_HTTPS_PROXY) {
+    $nodeVersion = [Version]((& node --version).TrimStart('v'))
+    if (($nodeVersion.Major -lt 24 -and
+         -not ($nodeVersion.Major -eq 22 -and $nodeVersion -ge [Version]'22.21.0')) -or
+        ($nodeVersion.Major -eq 24 -and $nodeVersion -lt [Version]'24.5.0')) {
+      throw 'The system proxy requires Node.js 22.21.0+ or 24.5.0+.'
+    }
+  }
+
   Write-Host "Region: $Region; model: qwen-plus. The key will not echo or be saved to a file."
   $secret = Read-Host 'Enter the NEW Model Studio API key' -AsSecureString
   $secretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
@@ -35,7 +57,7 @@ try {
   node dist-server/server/index.js
   if ($LASTEXITCODE -ne 0) { throw "Model server exited with code $LASTEXITCODE" }
 } finally {
-  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL -ErrorAction SilentlyContinue
+  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL,Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue
   if ($secretPointer -ne [IntPtr]::Zero) {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPointer)
   }

@@ -1,3 +1,5 @@
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { describe, expect, it } from 'vitest'
 import { ModelUpstreamHttpError } from './http.js'
 import { createQwenProviderFromEnv } from './qwen.js'
@@ -92,6 +94,45 @@ describe('Qwen OpenAI-compatible provider', () => {
       scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
     })
     expect(result).toBe('')
+  })
+
+  it('rejects proxy URLs with an unsafe scheme or an extra path', () => {
+    for (const proxy of ['file:///tmp/proxy', 'http://127.0.0.1:8080/other']) {
+      expect(() => createQwenProviderFromEnv({
+        DASHSCOPE_API_KEY: 'test-secret',
+        SOUL_ALBUM_QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        SOUL_ALBUM_QWEN_HTTPS_PROXY: proxy,
+      })).toThrow('invalid Qwen HTTPS proxy URL')
+    }
+  })
+
+  it('tunnels only to the approved host and keeps the model key out of CONNECT', async () => {
+    const proxy = createServer()
+    let connectTarget: string | undefined
+    let proxyAuthorization: string | undefined
+    proxy.on('connect', (request, socket) => {
+      connectTarget = request.url
+      proxyAuthorization = request.headers.authorization
+      socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n')
+    })
+    await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve))
+    try {
+      const port = (proxy.address() as AddressInfo).port
+      const model = createQwenProviderFromEnv({
+        DASHSCOPE_API_KEY: 'test-secret',
+        SOUL_ALBUM_QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        SOUL_ALBUM_QWEN_HTTPS_PROXY: `http://127.0.0.1:${port}`,
+      })!
+      const error = await model.generate({
+        scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
+      }).catch((reason: unknown) => reason)
+      expect(error).toBeInstanceOf(Error)
+      expect(connectTarget).toBe('dashscope.aliyuncs.com:443')
+      expect(proxyAuthorization).toBeUndefined()
+      expect(String(error)).not.toContain('test-secret')
+    } finally {
+      await new Promise<void>((resolve, reject) => proxy.close((error) => error ? reject(error) : resolve()))
+    }
   })
 
   it('keeps an upstream error body private while exposing its status to the local server', async () => {

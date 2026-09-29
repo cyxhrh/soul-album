@@ -1,7 +1,10 @@
+import { Agent, request as httpsRequest } from 'node:https'
 import { ModelUpstreamHttpError, type ModelProvider } from './http.js'
 
 const DEFAULT_MODEL = 'qwen-plus'
 const MAX_UPSTREAM_RESPONSE_CHARS = 64_000
+const MAX_UPSTREAM_RESPONSE_BYTES = MAX_UPSTREAM_RESPONSE_CHARS * 4
+const PROXY_REQUEST_TIMEOUT_MS = 10_000
 const DASH_SCOPE_HOSTS = new Set([
   'dashscope.aliyuncs.com',
   'dashscope-intl.aliyuncs.com',
@@ -36,10 +39,64 @@ function endpointFromBaseUrl(value: string): string {
   return `${base.origin}${base.pathname.replace(/\/$/, '')}/chat/completions`
 }
 
+function validatedProxyUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  let proxy: URL
+  try { proxy = new URL(value) } catch { throw new Error('invalid Qwen HTTPS proxy URL') }
+  if ((proxy.protocol !== 'http:' && proxy.protocol !== 'https:') ||
+    !proxy.hostname || proxy.pathname !== '/' || proxy.search || proxy.hash) {
+    throw new Error('invalid Qwen HTTPS proxy URL')
+  }
+  return proxy.href
+}
+
+/** Node's HTTPS agent handles CONNECT and verifies the upstream TLS certificate. */
+function postThroughProxy(
+  endpoint: string,
+  headers: Record<string, string>,
+  body: string,
+  signal: AbortSignal,
+  proxyUrl: string,
+): Promise<{ ok: boolean; status: number; text(): Promise<string> }> {
+  const agent = new Agent({ proxyEnv: { HTTPS_PROXY: proxyUrl } })
+  const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(PROXY_REQUEST_TIMEOUT_MS)])
+  return new Promise<{ ok: boolean; status: number; text(): Promise<string> }>((resolve, reject) => {
+    const request = httpsRequest(endpoint, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
+      agent, signal: boundedSignal,
+    }, (response) => {
+      const status = response.statusCode ?? 502
+      if (status < 200 || status >= 300) {
+        response.destroy()
+        resolve({ ok: false, status, text: async () => '' })
+        return
+      }
+      const chunks: Buffer[] = []
+      let size = 0
+      response.on('data', (chunk: Buffer) => {
+        size += chunk.length
+        if (size > MAX_UPSTREAM_RESPONSE_BYTES) {
+          response.destroy(new Error('upstream response too large'))
+          return
+        }
+        chunks.push(chunk)
+      })
+      response.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8')
+        resolve({ ok: true, status, text: async () => text })
+      })
+      response.on('error', reject)
+    })
+    request.on('error', reject)
+    request.end(body)
+  }).finally(() => agent.destroy())
+}
+
 /** The real provider is constructed only with server-held configuration. */
 export function createQwenProviderFromEnv(
   env: NodeJS.ProcessEnv = process.env,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): ModelProvider | undefined {
   const key = env.DASHSCOPE_API_KEY?.trim()
   const baseUrl = env.SOUL_ALBUM_QWEN_BASE_URL?.trim()
@@ -47,6 +104,7 @@ export function createQwenProviderFromEnv(
   const modelId = env.SOUL_ALBUM_QWEN_MODEL?.trim() || DEFAULT_MODEL
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(modelId)) throw new Error('invalid Qwen model id')
   const endpoint = endpointFromBaseUrl(baseUrl)
+  const proxyUrl = validatedProxyUrl(env.SOUL_ALBUM_QWEN_HTTPS_PROXY?.trim())
 
   return {
     provider: 'qwen', id: modelId,
@@ -59,7 +117,7 @@ export function createQwenProviderFromEnv(
         '如果不能可靠关联原话，输出 {"noReliableCitation":true}。不要输出 Markdown 或额外说明。',
       ].join('\n')
       const data = JSON.stringify({ scenarioVersion, snippets, confirmedContext })
-      const response = await fetcher(endpoint, {
+      const requestInit = {
         method: 'POST', signal, redirect: 'error',
         headers: {
           Authorization: `Bearer ${key}`,
@@ -71,7 +129,10 @@ export function createQwenProviderFromEnv(
           response_format: { type: 'json_object' },
           messages: [{ role: 'system', content: system }, { role: 'user', content: data }],
         }),
-      })
+      } satisfies RequestInit
+      const response = proxyUrl && !fetcher
+        ? await postThroughProxy(endpoint, requestInit.headers, requestInit.body, signal, proxyUrl)
+        : await (fetcher ?? fetch)(endpoint, requestInit)
       if (!response.ok) throw new ModelUpstreamHttpError(response.status)
       const raw = await response.text()
       if (raw.length > MAX_UPSTREAM_RESPONSE_CHARS) return ''
