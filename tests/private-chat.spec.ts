@@ -134,6 +134,7 @@ test('editing a sent source withdraws its reply and later replies that reused it
   await dialog.getByRole('button', { name: '同意并发送这一次' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('第二条依赖前文的回应。')
   await page.getByRole('button', { name: '画册' }).click()
+  await page.locator('.product-album-tools > summary').click()
   await page.getByRole('button', { name: '修改这条原话' }).first().click()
   await page.getByRole('textbox', { name: '修改原话' }).fill('我在公园看见一棵树。')
   await page.getByRole('button', { name: '保存修改' }).click()

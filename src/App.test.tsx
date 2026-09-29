@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom/vitest'
-import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import App from './App'
 
-afterEach(cleanup)
+afterEach(() => { vi.useRealTimers(); cleanup() })
 
 describe('Soul Album product', () => {
   it('opens directly in the conversation and keeps its three product tabs', () => {
@@ -13,7 +13,7 @@ describe('Soul Album product', () => {
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
     expect(screen.getByText('今天有什么想记下的？')).toBeVisible()
     const navigation = screen.getByRole('navigation', { name: '产品导航' })
-    expect(within(navigation).getAllByRole('button').map((button) => button.textContent)).toEqual([
+    expect(within(navigation).getAllByRole('button').slice(0, 3).map((button) => button.textContent)).toEqual([
       '对话', '画册', '生活数据',
     ])
     expect(screen.queryByText('每天问一点，慢慢看见自己')).not.toBeInTheDocument()
@@ -44,5 +44,26 @@ describe('Soul Album product', () => {
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '清除本次内容' }))
     expect(screen.getByText('今天有什么想记下的？')).toBeVisible()
+  })
+
+  it('shows a short typing state before a local control reply appears', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: '发送消息' }), { target: { value: '换个问题' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送' }))
+    const chat = screen.getByRole('region', { name: '对话记录' })
+    expect(within(chat).getByText('画册正在输入')).toBeVisible()
+    expect(within(chat).queryByText('好，换一个轻一点的问题。')).not.toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(2500))
+    expect(within(chat).getByText('好，换一个轻一点的问题。')).toBeVisible()
+  })
+
+  it('keeps a typed draft when speech input is unavailable', () => {
+    render(<App />)
+    const composer = screen.getByRole('textbox', { name: '发送消息' })
+    fireEvent.change(composer, { target: { value: '这是还没发出的草稿' } })
+    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
+    expect(screen.getByText('当前浏览器暂不支持语音输入，请继续用文字记录。')).toBeVisible()
+    expect(composer).toHaveValue('这是还没发出的草稿')
   })
 })

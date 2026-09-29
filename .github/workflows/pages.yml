@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - run: npm ci
+      # The frontend uses the bundled browser WASM runtime, not onnxruntime-node's
+      # native postinstall binary.
+      - run: npm ci --ignore-scripts
       - run: npm run test
       - run: npm run lint
       - run: npm run build -- --base=/soul-album/

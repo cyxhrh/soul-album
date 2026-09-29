@@ -56,11 +56,16 @@ it('keeps private-mode pages free of synthetic-person labels even with an observ
   } })
   journal = journalReducer(journal, { type: 'correctObservation', id: 'private-observation', text: '只是记录，没有进一步结论。' })
   const { container } = render(<AlbumPage mode="private" album={selectAlbum(journal, 1)!} journal={journal}
-    dateForDay={() => '第 1 天'} />)
+    dateForDay={() => '第 1 天'} displayDateForDay={() => '2026年9月28日'} />)
 
   expect(container).toHaveTextContent('你的原话修正')
   expect(container).not.toHaveTextContent('阿禾')
   expect(container).not.toHaveTextContent('合成')
+  expect(screen.getByText('2026年9月28日')).toBeVisible()
+  fireEvent.click(screen.getByRole('button', { name: '详情 ↓' }))
+  const details = screen.getByRole('region', { name: '页面详情' })
+  expect(details).toHaveTextContent('单次授权发送的片段可能由百炼保存')
+  expect(details).toHaveTextContent('演示日期时间')
 })
 
 it('renders all current corrections as printable content in their original order', () => {

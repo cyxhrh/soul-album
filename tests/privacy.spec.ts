@@ -13,6 +13,10 @@ async function chat(page: Page) {
 
 async function album(page: Page) {
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '画册' }).click()
+  const tools = page.locator('.product-album-tools')
+  if (await tools.count() && !(await tools.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await tools.locator('summary').click()
+  }
 }
 
 async function advanceTo(page: Page, day: number) {
@@ -320,9 +324,10 @@ test('a recorded entry shows the reader local hour', async ({ page }) => {
   const recorded = await page.getByRole('article', { name: '第 1 天画册页' }).innerText()
   expect(recorded).toMatch(new RegExp('演示日期时间 \\d{4}年\\d+月\\d+日 ' + localHour + ':'))
   expect(recorded).toContain('本次录入时间')
-  expect(recorded).toContain('演示日期：')
+  await page.getByRole('button', { name: '详情 ↓' }).click()
+  await expect(page.getByRole('region', { name: '页面详情' })).toContainText('演示日期：')
   await page.emulateMedia({ media: 'print' })
-  await expect(page.locator('.print-page:visible')).toContainText('演示日期：')
+  await expect(page.locator('.print-page:visible')).toContainText('演示日期时间')
 })
 
 test('an unfinished message draft persists across tabs and explicit day advance without auto-saving', async ({ page }) => {

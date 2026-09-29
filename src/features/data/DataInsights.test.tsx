@@ -34,19 +34,18 @@ it('only reveals the enabled source, with its provenance, range, unit and seven 
 
   fireEvent.click(screen.getByRole('button', { name: '开启手表步数模拟授权' }))
   const steps = screen.getByRole('region', { name: '手表步数' })
-  expect(within(steps).getByRole('img', { name: /手表步数七日图表/ })).toBeVisible()
-  expect(within(steps).getByText('模拟手表')).toBeVisible()
-  expect(within(steps).getByText(/2026年9月22日.*9月28日/)).toBeVisible()
-  const table = within(steps).getByRole('table', { name: '手表步数每日数值' })
+  expect(within(steps).getByText('6,900 步')).toBeVisible()
+  expect(screen.getByRole('img', { name: /手表步数七日图表.*2026年9月22日至9月28日/ })).toBeVisible()
+  expect(screen.getByRole('region', { name: '手表步数七日数据' })).toBeVisible()
+  const table = screen.getByRole('table', { name: '手表步数每日数值' })
   expect(within(table).getAllByRole('row')).toHaveLength(8)
-  expect(within(table).getByText('4,320 步')).toBeVisible()
-  expect(within(screen.getByRole('region', { name: '手机消费记录' })).queryByRole('table')).not.toBeInTheDocument()
-  expect(within(screen.getByRole('region', { name: '应用时长' })).queryByRole('img')).not.toBeInTheDocument()
+  expect(within(table).getByText('4,320 步')).toBeInTheDocument()
+  expect(screen.queryByRole('table', { name: '手机消费记录每日数值' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('img', { name: /应用时长七日图表/ })).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: '开启应用时长模拟授权' }))
-  const usage = screen.getByRole('region', { name: '应用时长' })
-  expect(within(usage).getByRole('table', { name: '应用时长每日数值' })).toBeVisible()
-  expect(within(usage).getByText('模拟系统使用统计')).toBeVisible()
+  expect(screen.getByRole('table', { name: '应用时长每日数值' })).toBeInTheDocument()
+  expect(screen.getByText(/固定合成样例 · 来源：模拟系统使用统计/)).toBeVisible()
   expect(screen.getAllByRole('img', { name: /七日图表/ })).toHaveLength(2)
 })
 
@@ -56,11 +55,12 @@ it('withdraws one source immediately without affecting another', () => {
   fireEvent.click(screen.getByRole('button', { name: '开启手机消费记录模拟授权' }))
 
   fireEvent.click(screen.getByRole('button', { name: '撤回手表步数模拟授权' }))
-  expect(within(screen.getByRole('region', { name: '手表步数' })).queryByRole('img')).not.toBeInTheDocument()
-  expect(within(screen.getByRole('region', { name: '手表步数' })).queryByRole('table')).not.toBeInTheDocument()
+  expect(screen.queryByRole('img', { name: /手表步数七日图表/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('table', { name: '手表步数每日数值' })).not.toBeInTheDocument()
   const spending = screen.getByRole('region', { name: '手机消费记录' })
-  expect(within(spending).getByRole('img', { name: /七日图表/ })).toBeVisible()
-  expect(within(spending).getByRole('table', { name: '手机消费记录每日数值' })).toBeVisible()
+  expect(within(spending).getByText('39.90 元')).toBeVisible()
+  expect(screen.getByRole('img', { name: /手机消费记录七日图表/ })).toBeVisible()
+  expect(screen.getByRole('table', { name: '手机消费记录每日数值' })).toBeInTheDocument()
 })
 
 it('keeps consent under parent control and avoids behavioral judgments', () => {
@@ -71,6 +71,16 @@ it('keeps consent under parent control and avoids behavioral judgments', () => {
   expect(screen.queryByRole('table')).not.toBeInTheDocument()
 
   rerender(<DataInsights consents={{ ...noConsent, spending: true }} onToggle={onToggle} />)
-  expect(screen.getByRole('table', { name: '手机消费记录每日数值' })).toBeVisible()
+  fireEvent.click(screen.getByText('查看七日数据'))
+  expect(screen.getByRole('table', { name: '手机消费记录每日数值' })).toBeInTheDocument()
   expect(screen.getByRole('region', { name: '手机消费记录' })).not.toHaveTextContent(/焦虑|抑郁|人格|冲动消费|不健康/)
+})
+
+it('switches the daily report date without changing consent or inventing an inference', () => {
+  render(<ControlledInsights />)
+  fireEvent.click(screen.getByRole('button', { name: '开启手表步数模拟授权' }))
+  fireEvent.click(screen.getByRole('button', { name: '9月22日' }))
+  expect(screen.getByRole('heading', { name: '2026年9月22日' })).toBeVisible()
+  expect(within(screen.getByRole('region', { name: '手表步数' })).getByText('4,320 步')).toBeVisible()
+  expect(screen.getByText(/不能据此判断心情、健康、人格/)).toBeInTheDocument()
 })

@@ -101,6 +101,7 @@ test('a correction made on day two appears there, and deleting its source remove
     .toContainText('我只是路过公园')
   await expect(page.getByRole('article', { name: '第 2 天画册页' })).toContainText('1 条此前回答')
   await page.getByRole('button', { name: '查看第 1 天' }).click()
+  await page.locator('.product-album-tools > summary').click()
   await page.getByRole('button', { name: '删除这条原话' }).click()
   await expect(page.getByRole('main', { name: '心灵画册产品' })).not.toContainText('我只是路过公园')
   await expect(page.getByRole('button', { name: '查看第 2 天' })).toHaveCount(0)
@@ -153,6 +154,7 @@ test('two corrections on one day remain visible in chat and the printable album 
   const text = await album.textContent()
   expect(text!.indexOf('第一次纠正')).toBeLessThan(text!.indexOf('第二次纠正'))
 
+  await page.locator('.product-album-tools > summary').click()
   await page.getByRole('button', { name: '删除这条原话' }).first().click()
   await expect(album).not.toContainText('第一次纠正：我只是看到花')
   await expect(album).toContainText('第二次纠正：这本书让我好奇')

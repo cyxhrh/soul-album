@@ -8,7 +8,7 @@
   .guided-shell, .guided-grid, .guided-album-column,
   .free-shell, .free-grid, .free-album-column { display: block; width: 100%; max-width: none; min-height: 0; margin: 0; padding: 0; }
   .print-page { display: block; width: 100%; min-height: 0; margin: 0; padding: 9mm 10mm 7mm 14mm;
-    border: 1px solid #c4cfc3; box-shadow: none; background: white; color: #24332e;
+    border: 1px solid var(--border); box-shadow: none; background: white; color: var(--text);
     break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .print-page .story-page-spine { left: 8mm; }
   .print-page .story-page-header { padding-bottom: 10px; }
@@ -16,7 +16,7 @@
   .print-page .story-page-header h2 { font-size: 29px; }
   .print-page .story-page-content { padding: 12px 0; }
   .print-page .story-entry-list { gap: 8px; }
-  .print-page .story-entry { padding: 9px 12px; background: #f7f4ed; break-inside: avoid; }
+  .print-page .story-entry { padding: 9px 12px; background: var(--bg); break-inside: avoid; }
   .print-page .story-entry blockquote { margin-bottom: 3px; font-size: 16px; line-height: 1.5; }
   .print-page .story-entry-source, .print-page .story-observation-basis,
   .print-page .story-observation-uncertain, .print-page .story-page-footer { font-size: 9pt; }

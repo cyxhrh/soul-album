@@ -7,7 +7,7 @@ import {
 import { titleDaysAffectedByEntryChange, type Entry } from '../../domain/journal'
 import { createBrowserLocalSession } from '../../domain/browserLocalSession'
 import { classifyChatIntent } from '../../domain/chatIntent'
-import { selectAlbum, selectAnsweredQuestions } from '../../domain/selectors'
+import { selectAlbum, selectAnsweredQuestions, type AlbumView } from '../../domain/selectors'
 import {
   privateAiAvailableOnThisHost, privateQuestionPreview, requestPrivateQuestion,
   validPrivateExcerpt, type PrivateQuestionPreview,
@@ -22,17 +22,41 @@ import DataInsights, { type BehaviorConsents, type BehaviorSource } from '../dat
 import '../../styles/product.css'
 
 const DAYS = [1, 2, 8, 9] as const
-const cadenceLabel: Record<Cadence, string> = {
-  daily: '每日两问', weekly: '每周一问', manual: '仅我主动',
-}
+const REPLY_DELAY_MS = 2400
+const MAX_RECORDING_MS = 30_000
+const BOOK_TURN_FALLBACK_MS = 850
 type EntryChange =
   | { kind: 'editEntry'; id: string; text: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
   | { kind: 'deleteEntry'; id: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
 type ProductTab = 'chat' | 'album' | 'data'
 type ChatMode = 'local' | 'qwen'
+type BookTurn = { direction: 'next' | 'previous'; fromDay: number; toDay: number }
 type ControlExchange = { id: string; reply: string; promptQuestionId?: string }
-type TimelineItem = { kind: 'entry'; order: number; messageId: string; entry: Entry } |
-  { kind: 'control'; order: number; messageId: string; exchange?: ControlExchange; text: string }
+type TimelineItem = { kind: 'entry'; order: number; messageId: string; sentAt: string; entry: Entry } |
+  { kind: 'control'; order: number; messageId: string; sentAt: string; exchange?: ControlExchange; text: string }
+
+function chatLocalDateTime(iso: string, timezone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(iso))
+  const field = (kind: string) => parts.find((part) => part.type === kind)?.value ?? ''
+  const year = Number(field('year'))
+  const month = Number(field('month'))
+  const date = Number(field('day'))
+  const weekday = '日一二三四五六'[new Date(Date.UTC(year, month - 1, date)).getUTCDay()]
+  const clock = `${field('hour')}:${field('minute')}`
+  return { date: `${year}-${field('month')}-${field('day')}`,
+    clock, detailed: `${year}年${month}月${date}日 星期${weekday} ${clock}` }
+}
+
+function chatTimeMarker(previous: TimelineItem | undefined, current: TimelineItem, timezone: string): string | null {
+  if (!previous) return null
+  const local = chatLocalDateTime(current.sentAt, timezone)
+  if (chatLocalDateTime(previous.sentAt, timezone).date !== local.date) return local.detailed
+  return new Date(current.sentAt).getTime() - new Date(previous.sentAt).getTime() >= 15 * 60_000
+    ? local.clock : null
+}
 
 function chatFailureCopy(error: unknown): string {
   const prefix = '这句仍保存在本页画册，没有自动重试。'
@@ -63,6 +87,34 @@ function nextDueDay(state: InvitationState, afterDay: number): number | null {
   return null
 }
 
+function AlbumPreviewPage({ album, openingDay, dateForDay, onOpen }: {
+  album: AlbumView | null
+  openingDay: number
+  dateForDay: (day: number) => string
+  onOpen?: (day: number) => void
+}) {
+  const shortDate = (day: number) => dateForDay(day).slice(5).replace('-', '.')
+  if (!album) return <div className="album-bookplate">
+    <p className="album-bookplate-eyebrow">写给今天的你</p>
+    <span className="album-bookplate-mark" aria-hidden="true" />
+    <h3>谢谢你，愿意为今天停一停</h3>
+    <p>不必把一切都说清楚。愿意留下一句话，就已经是在认真照顾自己。</p>
+    <small>这是我们一起装订的第一页 <span>{shortDate(openingDay)}</span></small>
+  </div>
+
+  const firstEntry = album.entries[0]
+  const excerpt = firstEntry && Array.from(firstEntry.text)
+  return <>
+    <div className="album-preview-folio"><span>上一页</span><span>{shortDate(album.day)}</span></div>
+    <p className="album-preview-date" aria-hidden="true">{shortDate(album.day)}</p>
+    <p className="album-preview-kicker">第 {album.day} 天 · {album.entries.length} 条原话</p>
+    <h3>{album.titleRevision > 0 ? album.title : firstEntry ? '那天留下的原话' : '那天补充的准确背景'}</h3>
+    {firstEntry ? <blockquote>“{excerpt?.slice(0, 80).join('')}{excerpt && excerpt.length > 80 ? '…' : ''}”</blockquote>
+      : <p className="album-preview-empty">这一天只有你补充的纠正记录。</p>}
+    {onOpen && <button type="button" onClick={() => onOpen(album.day)}>查看这一天详情 <span>↗</span></button>}
+  </>
+}
+
 function FreeSession({ onReset }: { onReset: () => void }) {
   const [session] = useState(() => createBrowserLocalSession())
   const [snapshot, setSnapshot] = useState(() => session.read())
@@ -81,12 +133,17 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [invitation, setInvitation] = useState(() => markInvitationShown(createInvitationState(), 1))
   const [day, setDay] = useState(1)
   const [viewedDay, setViewedDay] = useState(1)
+  const [bookTurn, setBookTurn] = useState<BookTurn | null>(null)
   const [questionIndex, setQuestionIndex] = useState(0)
   const [answeredInRound, setAnsweredInRound] = useState(false)
   const [extraQuestion, setExtraQuestion] = useState(false)
   const [thirdUsed, setThirdUsed] = useState(false)
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(session.firstQuestionId)
   const [draft, setDraft] = useState('')
+  const [voiceState, setVoiceState] = useState<'idle' | 'requesting' | 'recording' | 'transcribing' | 'failure'>('idle')
+  const [voiceMessage, setVoiceMessage] = useState('')
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
@@ -116,10 +173,33 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const chatDialogRef = useRef<HTMLDialogElement>(null)
   const chatOpenerRef = useRef<HTMLElement | null>(null)
   const chatControllerRef = useRef<AbortController | null>(null)
+  const detailsDialogRef = useRef<HTMLDialogElement>(null)
+  const detailsTriggerRef = useRef<HTMLButtonElement>(null)
+  const settingsRef = useRef<HTMLDetailsElement>(null)
+  const replyTimerRef = useRef<number | null>(null)
+  const bookTurnTimerRef = useRef<number | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const microphoneRef = useRef<MediaStream | null>(null)
+  const voiceWorkerRef = useRef<Worker | null>(null)
+  const recordingTimerRef = useRef<number | null>(null)
+  const recordingTickerRef = useRef<number | null>(null)
+  const voiceFrameRef = useRef<number | null>(null)
+  const voiceAudioContextRef = useRef<AudioContext | null>(null)
+  const voiceSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const voiceCanvasRef = useRef<HTMLCanvasElement>(null)
+  const voiceButtonRef = useRef<HTMLButtonElement>(null)
+  const voiceRetryRef = useRef<HTMLButtonElement>(null)
+  const messageInputRef = useRef<HTMLTextAreaElement>(null)
+  const activeTabRef = useRef(activeTab)
+  const recordedAudioRef = useRef<Blob | null>(null)
+  const focusDraftAfterVoiceRef = useRef(false)
+  const voiceDisposedRef = useRef(false)
 
   useEffect(() => () => {
     privateControllerRef.current?.abort()
     chatControllerRef.current?.abort()
+    if (replyTimerRef.current !== null) window.clearTimeout(replyTimerRef.current)
+    if (bookTurnTimerRef.current !== null) window.clearTimeout(bookTurnTimerRef.current)
   }, [])
 
   useLayoutEffect(() => {
@@ -147,6 +227,282 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     dialog.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
     return () => { if (dialog.open) dialog.close() }
   }, [privatePreview])
+
+  useEffect(() => {
+    voiceDisposedRef.current = false
+    return () => {
+      voiceDisposedRef.current = true
+      if (recorderRef.current?.state === 'recording') {
+        recorderRef.current.onstop = null
+        recorderRef.current.stop()
+      }
+      releaseMicrophone()
+      voiceWorkerRef.current?.terminate()
+    }
+  }, [])
+
+  useLayoutEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  useLayoutEffect(() => {
+    if (voiceState === 'failure') voiceRetryRef.current?.focus()
+    if (voiceState === 'idle' && focusDraftAfterVoiceRef.current) {
+      focusDraftAfterVoiceRef.current = false
+      messageInputRef.current?.focus()
+      const end = messageInputRef.current?.value.length ?? 0
+      messageInputRef.current?.setSelectionRange(end, end)
+    }
+  }, [voiceState])
+
+  useEffect(() => {
+    if (voiceState !== 'recording') return
+    function cancelOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      cancelVoiceRecording()
+    }
+    document.addEventListener('keydown', cancelOnEscape)
+    return () => document.removeEventListener('keydown', cancelOnEscape)
+  }, [voiceState])
+
+  function startVoiceWave(stream: MediaStream) {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const context = new AudioContext()
+    const source = context.createMediaStreamSource(stream)
+    const analyser = context.createAnalyser()
+    analyser.fftSize = 1024
+    source.connect(analyser)
+    voiceAudioContextRef.current = context
+    voiceSourceRef.current = source
+    void context.resume().catch(() => {
+      // Recording can still work even when a browser suspends visual metering.
+    })
+    // 波形色取自 design token（canvas 2D 无法直接使用 CSS 变量），兜底值即 --accent 的取值
+    const waveColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--accent').trim() || '#c03d2a'
+    const samples = new Float32Array(analyser.fftSize)
+    const levels = Array<number>(36).fill(0)
+    let smoothed = 0
+    let lastSampledAt = 0
+    function draw(now: number) {
+      if (recorderRef.current?.state !== 'recording') return
+      const canvas = voiceCanvasRef.current
+      const painter = canvas?.getContext('2d')
+      if (canvas && painter) {
+        const scale = window.devicePixelRatio || 1
+        const width = canvas.clientWidth
+        const height = canvas.clientHeight
+        if (canvas.width !== Math.round(width * scale) || canvas.height !== Math.round(height * scale)) {
+          canvas.width = Math.round(width * scale)
+          canvas.height = Math.round(height * scale)
+        }
+        painter.setTransform(scale, 0, 0, scale, 0, 0)
+        analyser.getFloatTimeDomainData(samples)
+        let squareSum = 0
+        for (const sample of samples) squareSum += sample * sample
+        const volume = Math.min(1, Math.sqrt(squareSum / samples.length) * 5)
+        smoothed += (volume - smoothed) * (volume > smoothed ? 0.42 : 0.14)
+        if (now - lastSampledAt >= 42) {
+          levels.shift()
+          levels.push(smoothed)
+          lastSampledAt = now
+        }
+        painter.clearRect(0, 0, width, height)
+        const gap = width / levels.length
+        painter.fillStyle = waveColor
+        levels.forEach((level, index) => {
+          const barHeight = 2 + level * (height - 8)
+          painter.globalAlpha = 0.45 + index / (levels.length * 1.8)
+          painter.fillRect(index * gap + gap * 0.27, (height - barHeight) / 2,
+            Math.max(1.5, gap * 0.45), barHeight)
+        })
+        painter.globalAlpha = 1
+      }
+      voiceFrameRef.current = window.requestAnimationFrame(draw)
+    }
+    voiceFrameRef.current = window.requestAnimationFrame(draw)
+  }
+
+  function releaseMicrophone() {
+    if (recordingTimerRef.current !== null) window.clearTimeout(recordingTimerRef.current)
+    recordingTimerRef.current = null
+    if (recordingTickerRef.current !== null) window.clearInterval(recordingTickerRef.current)
+    recordingTickerRef.current = null
+    if (voiceFrameRef.current !== null) window.cancelAnimationFrame(voiceFrameRef.current)
+    voiceFrameRef.current = null
+    voiceSourceRef.current?.disconnect()
+    voiceSourceRef.current = null
+    if (voiceAudioContextRef.current) void voiceAudioContextRef.current.close()
+    voiceAudioContextRef.current = null
+    microphoneRef.current?.getTracks().forEach((track) => track.stop())
+    microphoneRef.current = null
+    recorderRef.current = null
+  }
+
+  async function transcribeRecording(blob: Blob) {
+    if (voiceDisposedRef.current) return
+    if (!blob.size) {
+      setVoiceMessage('没有录到声音，请重试。')
+      setVoiceState('idle')
+      return
+    }
+    recordedAudioRef.current = blob
+    setVoiceState('transcribing')
+    setVoiceMessage('我在把你刚才说的话写下来，第一次可能要多等一会儿…')
+    let context: AudioContext | null = null
+    try {
+      context = new AudioContext()
+      const decoded = await context.decodeAudioData(await blob.arrayBuffer())
+      const frames = Math.ceil(decoded.duration * 16_000)
+      const offline = new OfflineAudioContext(1, frames, 16_000)
+      const source = offline.createBufferSource()
+      source.buffer = decoded
+      source.connect(offline.destination)
+      source.start()
+      const samples = (await offline.startRendering()).getChannelData(0)
+      if (voiceDisposedRef.current) return
+      const meanSquare = samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length
+      if (!samples.length || meanSquare < 0.000009) {
+        setVoiceMessage('没有录到清晰声音，请重试。')
+        recordedAudioRef.current = null
+        setVoiceState('idle')
+        return
+      }
+      const worker = voiceWorkerRef.current ?? new Worker(new URL('./voiceWorker.ts', import.meta.url), { type: 'module' })
+      voiceWorkerRef.current = worker
+      worker.onmessage = (event: MessageEvent<{ type: string; text?: string; message?: string }>) => {
+        if (voiceDisposedRef.current) return
+        if (event.data.type === 'loading') setVoiceMessage('我先准备一下，再把刚才的话写下来…')
+        if (event.data.type === 'transcribing') setVoiceMessage('我在把你刚才说的话写下来…')
+        if (event.data.type === 'result') {
+          const text = event.data.text?.trim() ?? ''
+          if (text) {
+            setDraft((current) => [current.trimEnd(), text].filter(Boolean).join('\n'))
+            focusDraftAfterVoiceRef.current = true
+            recordedAudioRef.current = null
+            setVoiceMessage('已转成文字，可修改后发送。')
+            setVoiceState('idle')
+          } else {
+            setVoiceMessage('没有识别出文字，可以重试。')
+            setVoiceState('failure')
+          }
+        }
+        if (event.data.type === 'error') {
+          setVoiceMessage('离线识别失败，可以重试或放弃。')
+          setVoiceState('failure')
+          worker.terminate()
+          voiceWorkerRef.current = null
+        }
+      }
+      worker.onerror = () => {
+        setVoiceMessage('离线识别无法启动，可以重试或放弃。')
+        setVoiceState('failure')
+        worker.terminate()
+        voiceWorkerRef.current = null
+      }
+      worker.postMessage({ samples }, [samples.buffer])
+    } catch {
+      setVoiceMessage('录音处理失败，可以重试或放弃。')
+      setVoiceState('failure')
+    } finally {
+      await context?.close()
+    }
+  }
+
+  async function toggleVoiceRecording() {
+    if (voiceState === 'recording') {
+      if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
+      releaseMicrophone()
+      setVoiceState('transcribing')
+      setVoiceMessage('我在准备把刚才的话写下来…')
+      return
+    }
+    if (voiceState !== 'idle') return
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined' ||
+      typeof AudioContext === 'undefined' || typeof OfflineAudioContext === 'undefined' || typeof Worker === 'undefined') {
+      setVoiceMessage('当前浏览器暂不支持语音输入，请继续用文字记录。')
+      return
+    }
+    try {
+      setVoiceState('requesting')
+      setVoiceMessage('正在请求麦克风权限…')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      if (voiceDisposedRef.current || activeTabRef.current !== 'chat') {
+        stream.getTracks().forEach((track) => track.stop())
+        if (!voiceDisposedRef.current) {
+          setVoiceState('idle')
+          setVoiceMessage('已离开对话，这段语音没有保存。')
+        }
+        return
+      }
+      microphoneRef.current = stream
+      const recorder = new MediaRecorder(stream)
+      const chunks: BlobPart[] = []
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
+      recorder.onstop = () => { releaseMicrophone(); void transcribeRecording(new Blob(chunks, { type: recorder.mimeType })) }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        if (recorder.state === 'recording') recorder.stop()
+        releaseMicrophone()
+        setVoiceState('idle')
+        setVoiceMessage('录音出错，请重试。')
+      }
+      recorderRef.current = recorder
+      recorder.start()
+      startVoiceWave(stream)
+      setVoiceState('recording')
+      setRecordingSeconds(0)
+      setVoiceMessage('聆听中 · 点麦克风转成文字，最长 30 秒')
+      const beganAt = Date.now()
+      recordingTickerRef.current = window.setInterval(() => {
+        setRecordingSeconds(Math.min(30, Math.floor((Date.now() - beganAt) / 1000)))
+      }, 250)
+      recordingTimerRef.current = window.setTimeout(() => {
+        if (recorder.state === 'recording') {
+          recorder.stop()
+          releaseMicrophone()
+          setVoiceState('transcribing')
+          setVoiceMessage('已经听了 30 秒，我来把这段话写下来…')
+        }
+      }, MAX_RECORDING_MS)
+    } catch (error) {
+      if (recorderRef.current?.state === 'recording') {
+        recorderRef.current.onstop = null
+        recorderRef.current.stop()
+      }
+      releaseMicrophone()
+      setVoiceState('idle')
+      setVoiceMessage(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? '麦克风权限未开启，可在浏览器设置中允许。' : '无法开始录音，请重试。')
+    }
+  }
+
+  function cancelVoiceRecording() {
+    if (voiceState !== 'recording') return
+    const recorder = recorderRef.current
+    if (recorder) {
+      recorder.onstop = null
+      if (recorder.state === 'recording') recorder.stop()
+    }
+    releaseMicrophone()
+    setVoiceState('idle')
+    setVoiceMessage('已停止聆听，这段语音没有转成文字。草稿还在。')
+    if (activeTabRef.current === 'chat') voiceButtonRef.current?.focus()
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'chat' && voiceState === 'recording') cancelVoiceRecording()
+  }, [activeTab, voiceState])
+
+  function abandonVoiceTranscription() {
+    recordedAudioRef.current = null
+    setVoiceState('idle')
+    setVoiceMessage('已放弃本次语音，原有草稿已保留。')
+    voiceButtonRef.current?.focus()
+  }
+
+  function retryVoiceTranscription() {
+    if (recordedAudioRef.current) void transcribeRecording(recordedAudioRef.current)
+  }
 
   useLayoutEffect(() => {
     if (!printPending) {
@@ -268,8 +624,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     observation.revision === activeObservationCitation.revision)
   const activeSourcePreview = entrySourcePreview(activeEntryCitation?.id, activeEntryCitation?.revision) ??
     (activeObservation ? `依据你的纠正 · 「${Array.from(activeObservation.text).slice(0, 28).join('')}」` : null)
-  const todayCorrections = journal.observations.filter((observation) =>
-    observation.day === day && observation.status === 'corrected')
   const recordedDays = [...new Set([
     ...journal.entries.map((entry) => entry.day),
     ...journal.observations.filter((observation) => observation.status === 'corrected')
@@ -278,6 +632,15 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     .sort((first, second) => first - second)
   const albumDay = recordedDays.includes(viewedDay) ? viewedDay : recordedDays.at(-1) ?? day
   const album = selectAlbum(journal, albumDay)
+  const selectedDayIndex = recordedDays.indexOf(albumDay)
+  const previousAlbumDay = selectedDayIndex > 0 ? recordedDays[selectedDayIndex - 1] : null
+  const nextAlbumDay = selectedDayIndex >= 0 && selectedDayIndex < recordedDays.length - 1
+    ? recordedDays[selectedDayIndex + 1] : null
+  const bookTurnTarget = bookTurn ? selectAlbum(journal, bookTurn.toDay) : null
+  const bookBaseAlbum = bookTurnTarget ?? album
+  const bookBaseIndex = bookBaseAlbum ? recordedDays.indexOf(bookBaseAlbum.day) : -1
+  const bookBasePreviousDay = bookBaseIndex > 0 ? recordedDays[bookBaseIndex - 1] : null
+  const bookBasePreviousAlbum = bookBasePreviousDay === null ? null : selectAlbum(journal, bookBasePreviousDay)
   const earlierEntries = journal.entries.filter((entry) => entry.day < albumDay)
   const currentPageEntries = journal.entries.filter((entry) => entry.day === albumDay)
   const firstComparedEntry = earlierEntries.find((entry) => entry.id === comparisonFirstId)
@@ -289,7 +652,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     .sort((first, second) => first - second)
   const answeredQuestions = selectAnsweredQuestions(journal, albumDay)
     .filter((item) => !journal.entries.find((entry) => entry.id === item.answerEntryId)?.topicId.startsWith('proactive-day-'))
-  const todayQuestions = selectAnsweredQuestions(journal, day)
   const entryById = new Map(journal.entries.map((entry) => [entry.id, entry]))
   const controlsById = new Map(controlExchanges.map((exchange) => [exchange.id, exchange]))
   const visibleChatTurns = currentChatTurns(snapshot, chatTurns)
@@ -306,23 +668,28 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     ? snapshot.entries.find((entry) => entry.id === chatPreview.turn.id)?.text ?? ''
     : chatPreview?.turn.kind === 'control'
       ? snapshot.messages.find((message) => message.id === chatPreview.turn.id)?.controlText ?? '' : ''
-  const todayTimeline: TimelineItem[] = session.projectMessages(snapshot)
-    .filter((message) => session.dayForTimestamp(message.occurredAt) === day)
+  const conversationTimeline: TimelineItem[] = session.projectMessages(snapshot)
     .flatMap((message): TimelineItem[] => {
       if (message.entryId) {
         const entry = entryById.get(message.entryId)
-        return entry ? [{ kind: 'entry' as const, order: message.sequence, messageId: message.id, entry }] : []
+        return entry ? [{ kind: 'entry' as const, order: message.sequence, messageId: message.id,
+          sentAt: message.occurredAt, entry }] : []
       }
       const exchange = controlsById.get(message.id)
       return [{ kind: 'control' as const, order: message.sequence,
-        messageId: message.id, exchange, text: message.text }]
+        messageId: message.id, sentAt: message.occurredAt, exchange, text: message.text }]
     })
+  const conversationDays = [...new Set([
+    ...conversationTimeline.map((item) => session.dayForTimestamp(item.sentAt)), day,
+  ])].sort((first, second) => first - second)
+    .map((conversationDay) => ({ day: conversationDay,
+      items: conversationTimeline.filter((item) => session.dayForTimestamp(item.sentAt) === conversationDay) }))
 
   useLayoutEffect(() => {
     if (activeTab !== 'chat' || !chatScrollRef.current) return
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
   }, [activeTab, day, journal.entries.length, controlExchanges.length, questionIndex, extraQuestion,
-    chatTurns.length, chatMode, chatPreview])
+    chatTurns.length, chatMode, chatPreview, typingMessageId])
 
   useEffect(() => {
     setChatTurns((current) => {
@@ -409,6 +776,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   function closeChatGate() {
     chatControllerRef.current?.abort()
     chatControllerRef.current = null
+    if (replyTimerRef.current !== null) window.clearTimeout(replyTimerRef.current)
+    replyTimerRef.current = null
+    setTypingMessageId(null)
     setChatRequestPending(false)
     setChatPreview(null)
     setChatQuote('')
@@ -474,6 +844,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     const controller = new AbortController()
     chatControllerRef.current = controller
     setChatRequestPending(true)
+    setTypingMessageId(preview.messageId)
     setChatError('')
     try {
       const response = await requestPrivateChat(request, controller.signal)
@@ -579,6 +950,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   function viewRecordedDay(target: number) {
+    if (bookTurnTimerRef.current !== null) {
+      window.clearTimeout(bookTurnTimerRef.current)
+      bookTurnTimerRef.current = null
+    }
+    setBookTurn(null)
     setViewedDay(target)
     setComparisonFirstId('')
     setComparisonSecondId('')
@@ -590,8 +966,31 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setPendingEntryChange(null)
   }
 
+  function turnAlbum(direction: 'next' | 'previous') {
+    if (bookTurn || selectedDayIndex < 0) return
+    const targetDay = recordedDays[selectedDayIndex + (direction === 'next' ? 1 : -1)]
+    if (targetDay === undefined) return
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      viewRecordedDay(targetDay)
+      return
+    }
+    setBookTurn({ direction, fromDay: albumDay, toDay: targetDay })
+    bookTurnTimerRef.current = window.setTimeout(() => {
+      bookTurnTimerRef.current = null
+      viewRecordedDay(targetDay)
+    }, BOOK_TURN_FALLBACK_MS)
+  }
+
+  function completeBookTurn() {
+    if (bookTurn) viewRecordedDay(bookTurn.toDay)
+  }
+
   function advanceDay(target: number) {
     if (target <= day) return
+    if (settingsRef.current?.open) {
+      settingsRef.current.open = false
+      settingsRef.current.querySelector('summary')?.focus()
+    }
     closeChatGate()
     viewRecordedDay(target)
     const settled = settleInvitation(invitation, day, answeredInRound)
@@ -613,9 +1012,18 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setStatus('这句话已写入今天的画册；邀请节奏从这里重新计算。')
   }
 
+  function beginLocalReply(messageId: string) {
+    if (replyTimerRef.current !== null) window.clearTimeout(replyTimerRef.current)
+    setTypingMessageId(messageId)
+    replyTimerRef.current = window.setTimeout(() => {
+      replyTimerRef.current = null
+      setTypingMessageId((current) => current === messageId ? null : current)
+    }, REPLY_DELAY_MS)
+  }
+
   function sendMessage() {
     const text = draft.trim()
-    if (!text) return
+    if (!text || typingMessageId || voiceState !== 'idle') return
     const intent = classifyChatIntent(text)
     const promptId = chatMode === 'local' && (due || extraQuestion) ? activeQuestionId : null
     let result: ReturnType<typeof session.sendMessage>
@@ -637,6 +1045,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       return
     }
     if (intent === 'skip' || intent === 'decline') {
+      beginLocalReply(result.message.id)
       if (extraQuestion) {
         setExtraQuestion(false)
         setActiveQuestionId(null)
@@ -654,6 +1063,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       return
     }
     if (intent === 'more') {
+      beginLocalReply(result.message.id)
       const canAskThird = roundClosed && invitation.shownDays.includes(day) && cadence === 'daily' &&
         !thirdUsed && !invitation.paused
       if (canAskThird) {
@@ -667,7 +1077,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       return
     }
     if (intent === 'share' || (!due && !extraQuestion)) share()
-    else answerQuestion()
+    else { beginLocalReply(result.message.id); answerQuestion() }
   }
 
   function applyEntryChange(change: EntryChange) {
@@ -779,6 +1189,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setConsents((current) => ({ ...current, [source]: !current[source] }))
   }
 
+  function closeDetails() {
+    detailsDialogRef.current?.close()
+    detailsTriggerRef.current?.focus()
+  }
+
   return (
     <main className={'product-shell product-tab-' + activeTab} aria-label="心灵画册产品">
       <nav className="product-nav screen-only" aria-label="产品导航">
@@ -789,18 +1204,14 @@ function FreeSession({ onReset }: { onReset: () => void }) {
           <button type="button" aria-current={activeTab === 'album' ? 'page' : undefined} onClick={() => setActiveTab('album')}>画册</button>
           <button type="button" aria-current={activeTab === 'data' ? 'page' : undefined} onClick={() => setActiveTab('data')}>生活数据</button>
         </div>
-        <p className="product-nav-footnote">只保留在本次页面<br />刷新后内容会清空</p>
+        <div className="product-nav-foot">
+          <button type="button" className="product-clear" onClick={onReset} aria-label="清除本次内容">清除</button>
+          <button type="button" className="product-details-trigger" ref={detailsTriggerRef}
+            onClick={() => detailsDialogRef.current?.showModal()}>详情 <span aria-hidden="true">↗</span></button>
+        </div>
       </nav>
       <div className="product-workspace">
-        <header className="product-header screen-only">
-          <div><p className="product-overline">心灵画册 / {activeTab === 'chat' ? '日常对话' : activeTab === 'album' ? '我的画册' : '生活数据'}</p>
-            {activeTab !== 'data' && <h1>{activeTab === 'chat' ? '聊聊今天' : '翻开画册'}</h1>}</div>
-          <div className="product-header-meta">
-            <span>第 {day} 天 · 演示日期 {session.dateForDay(day)} · {cadenceLabel[cadence]}{invitation.paused && ' · 已暂停'}</span>
-            <span>{chatMode === 'qwen' ? '千问聊天 · 每次确认' : activeQuestionMode} · 记录仅留本次页面</span>
-            <button type="button" onClick={onReset} aria-label="清除本次内容">清除</button>
-          </div>
-        </header>
+        {activeTab !== 'data' && <h1 className="product-sr-title">{activeTab === 'chat' ? '聊聊今天' : '翻开画册'}</h1>}
         {status && <p ref={statusRef} className="free-status product-status screen-only" role="status" tabIndex={-1}>{status}</p>}
         <div className="product-content">
           <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat'}>
@@ -816,17 +1227,24 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               <span>{chatMode === 'qwen' ? '每次发送单独授权 · 可连续聊天' : '默认纯本地 · 不使用模型'}</span>
             </div>}
             <div className="product-chat-scroll" ref={chatScrollRef}>
-              <p className="product-day-divider"><span>第 {day} 天</span></p>
+              {conversationDays.map(({ day: conversationDay, items }) => <section className="product-chat-day"
+                aria-label={'第 ' + conversationDay + ' 天对话'} key={conversationDay}>
+              <p className="product-day-divider"><span>
+                {items[0] ? chatLocalDateTime(items[0].sentAt, session.timezone).detailed : session.dateForDay(conversationDay)}
+                {conversationDay > 1 && <small>演示第 {conversationDay} 天</small>}</span></p>
               <div className="product-thread">
-                {todayTimeline.map((item) => {
+                {items.map((item, index) => {
+                  const marker = chatTimeMarker(items[index - 1], item, session.timezone)
                   if (item.kind === 'control') return <div className="product-exchange" key={item.messageId}>
+                    {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
                     {item.exchange?.promptQuestionId && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><small>心灵画册 · 当时的问题</small>
                         <p>{snapshot.questions.find((question) => question.id === item.exchange?.promptQuestionId)?.text ?? '旧提问已撤下。'}</p></div>
                     </div>}
-                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p></div></div>
-                    {item.exchange?.reply && <div className="product-bubble-row agent"><span className="product-avatar" aria-hidden="true">画</span>
+                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p>
+                      <time dateTime={item.sentAt}>{chatLocalDateTime(item.sentAt, session.timezone).clock}</time></div></div>
+                    {item.exchange?.reply && typingMessageId !== item.messageId && <div className="product-bubble-row agent"><span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><p>{item.exchange.reply}</p></div></div>}
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
@@ -839,11 +1257,13 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       </div></div>}
                   </div>
                   const entry = item.entry
-                  const answered = todayQuestions.find((questionRecord) => questionRecord.answerEntryId === entry.id)
+                  const answered = selectAnsweredQuestions(journal, entry.day)
+                    .find((questionRecord) => questionRecord.answerEntryId === entry.id)
                   const answeredSourcePreview = answered?.status === 'ready'
                     ? entrySourcePreview(answered.citationEntryId, answered.citationEntryRevision) : null
                   const isProactive = entry.topicId.startsWith('proactive-day-')
                   return <div className="product-exchange" key={entry.id}>
+                    {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
                     {answered && !isProactive && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><small>心灵画册 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
@@ -856,7 +1276,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble">
                       <p>{entry.text}</p>
-                      <time dateTime={entry.recordedAt}>{entry.recordedAt.slice(11, 16)}{entry.revision > 1 && ' · 已修订'}</time>
+                      <time dateTime={item.sentAt}>{chatLocalDateTime(item.sentAt, session.timezone).clock}{entry.revision > 1 && ' · 已修订'}</time>
                     </div></div>
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
@@ -869,11 +1289,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       </div></div>}
                   </div>
                 })}
-                {todayCorrections.map((correction) => <div className="product-bubble-row user"
+                {journal.observations.filter((observation) => observation.day === conversationDay &&
+                  observation.status === 'corrected').map((correction) => <div className="product-bubble-row user"
                   aria-label="你补充的纠正" key={correction.id}>
                   <div className="product-bubble"><small>你补充的准确背景 · 仅留本页</small><p>{correction.text}</p></div>
                 </div>)}
-                {chatMode === 'local' && (due || extraQuestion) && <div className="product-bubble-row agent current">
+                {conversationDay === day && chatMode === 'local' && !typingMessageId && (due || extraQuestion) && <div className="product-bubble-row agent current">
                   <span className="product-avatar" aria-hidden="true">画</span>
                   <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'} · {activeQuestionMode}</small>
                     <p>{visibleQuestionText}</p>
@@ -893,74 +1314,159 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       </>}
                     </div>}</div>
                 </div>}
-                {chatMode === 'local' && !due && !extraQuestion && <div className="product-rest" role="note">
+                {conversationDay === day && chatMode === 'local' && !typingMessageId && !due && !extraQuestion && <div className="product-rest" role="note">
                   <strong>{roundClosed ? '今天的邀请已结束' : '第 ' + day + ' 天不邀请'}</strong>
                   <p>{roundClosed ? '今天可以停在这里，也可以自己再记一句。' :
                     '未展示的日期不会补发问题；想记事时仍可直接留言。'}</p>
                   {!roundClosed && cadence === 'weekly' && nextDay !== null && <p className="product-next-hint">下次邀请在第 {nextDay} 天</p>}
                 </div>}
-                {chatMode === 'qwen' && todayTimeline.length === 0 && <div className="product-rest" role="note">
+                {conversationDay === day && chatMode === 'qwen' && items.length === 0 && <div className="product-rest" role="note">
                   <strong>想说什么，直接写在下面</strong>
                   <p>先保存在本页，再由你决定这次是否发给千问。它可以回应你，也可以选择不追问。</p>
                 </div>}
+                {conversationDay === day && typingMessageId && <div className="product-bubble-row agent product-typing" aria-live="polite">
+                  <span className="product-avatar" aria-hidden="true">画</span>
+                  <div className="product-bubble"><span>画册正在输入</span>
+                    <span className="product-typing-dots" aria-hidden="true"><i /><i /><i /></span></div>
+                </div>}
               </div>
+              </section>)}
             </div>
             <div className="product-chat-controls">
               <div className="product-composer">
-                <div className="product-composer-input">
-                  <label htmlFor="free-message">发送消息</label>
-                  <textarea id="free-message" value={draft} maxLength={10000} onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                        event.preventDefault(); sendMessage()
-                      }
-                    }} rows={2} placeholder="想说什么，直接写在这里…" />
+                <div className="product-composer-input" aria-busy={voiceState === 'transcribing'}>
+                  {voiceState === 'idle' ? <>
+                    <label htmlFor="free-message">发送消息</label>
+                    <textarea id="free-message" ref={messageInputRef} value={draft} maxLength={10000}
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault(); sendMessage()
+                        }
+                      }} rows={2} placeholder="想说什么，直接写在这里…" />
+                  </> : voiceState === 'recording' ? <div className="product-voice-panel">
+                    <div className="product-wave" aria-hidden="true"><canvas ref={voiceCanvasRef} />
+                      <span className="product-wave-still" /></div>
+                    <div className="product-voice-panel-foot">
+                      <span className="product-recording-label"><i aria-hidden="true" />聆听中
+                        <time aria-label={`录音时长 ${Math.floor(recordingSeconds / 60)} 分 ${recordingSeconds % 60} 秒`}>
+                          {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:
+                          {String(recordingSeconds % 60).padStart(2, '0')}</time></span>
+                      <button type="button" className="product-voice-text-action" onClick={cancelVoiceRecording}
+                        aria-label="停止聆听并放弃本次语音">停止聆听</button>
+                    </div>
+                  </div> : voiceState === 'failure' ? <div className="product-voice-state product-voice-failure">
+                    <p>{voiceMessage}</p><div>
+                      <button type="button" ref={voiceRetryRef} onClick={retryVoiceTranscription}>重试转写</button>
+                      <button type="button" onClick={abandonVoiceTranscription}>放弃本次语音</button>
+                    </div>
+                  </div> : <div className="product-voice-state">
+                    <span className="product-voice-progress" aria-hidden="true" />
+                    <p>{voiceState === 'requesting' ? '等待麦克风授权…' : voiceMessage}</p>
+                  </div>}
+                </div>
+                <div className="product-composer-toolbar">
+                  <details className="product-settings" ref={settingsRef}><summary>邀请节奏与演示日期</summary>
+                    <p>连续两次实际展示的整轮都没有回答，只会降低邀请频率。历史回看不计入。</p>
+                    <div className="product-settings-actions">
+                      <label htmlFor="free-cadence">手动调整节奏</label>
+                      <select id="free-cadence" value={choice} onChange={(event) => setChoice(event.target.value as Cadence)}>
+                        <option value="daily">每日两问</option><option value="weekly">每周一问</option><option value="manual">仅我主动</option>
+                      </select>
+                      <button type="button" onClick={applyCadence}>应用节奏</button>
+                      <button type="button" onClick={togglePause}>{invitation.paused ? '恢复邀请' : '暂停邀请'}</button>
+                    </div>
+                    <div className="product-advance"><span>显式推进演示日</span>
+                      {navigationDays.map((target) => <button type="button" key={target}
+                        onClick={() => advanceDay(target)}>推进到第 {target} 天</button>)}
+                    </div>
+                    {dynamicNextDay && <p>下次邀请在第 {nextDay} 天；中间日期不会补发。</p>}
+                  </details>
+                  <div className="product-composer-actions">
+                  <button type="button" className="product-voice" ref={voiceButtonRef}
+                    onClick={() => void toggleVoiceRecording()}
+                    disabled={(voiceState !== 'idle' && voiceState !== 'recording') || !!chatPreview || chatRequestPending}
+                    aria-pressed={voiceState === 'recording'} aria-busy={voiceState === 'transcribing'}
+                    aria-label={voiceState === 'recording' ? '结束聆听并转成文字' :
+                      voiceState === 'transcribing' ? '正在转写' : '开始语音输入'}
+                    title={voiceState === 'recording' ? '结束聆听并转成文字' : '语音输入（本机识别）'}>
+                    {voiceState === 'recording' ? <span className="product-voice-stop" aria-hidden="true" /> :
+                      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+                        strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="9" y="3" width="6" height="12" rx="3" />
+                        <path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8" />
+                      </svg>}
+                  </button>
                   <button type="button" className="product-send" onClick={sendMessage}
-                    disabled={!draft.trim() || !!chatPreview || chatRequestPending}>发送</button>
+                    disabled={!draft.trim() || !!chatPreview || chatRequestPending || !!typingMessageId || voiceState !== 'idle'}>发送</button>
+                  </div>
                 </div>
-                <p className="product-composer-note">{chatMode === 'qwen'
-                  ? '发送先记入本页画册；确认本次内容后才请千问回复。下一句仍可直接在这里说。'
-                  : '演示版会将一般消息记入画册；可随时修改或删除。'}</p>
+                {voiceMessage && <p className="product-composer-note" role="status" aria-live="polite">{voiceMessage}</p>}
               </div>
-              <details className="product-settings"><summary>邀请节奏与演示日期</summary>
-                <p>连续两次实际展示的整轮都没有回答，只会降低邀请频率。历史回看不计入。</p>
-                <div className="product-settings-actions">
-                  <label htmlFor="free-cadence">手动调整节奏</label>
-                  <select id="free-cadence" value={choice} onChange={(event) => setChoice(event.target.value as Cadence)}>
-                    <option value="daily">每日两问</option><option value="weekly">每周一问</option><option value="manual">仅我主动</option>
-                  </select>
-                  <button type="button" onClick={applyCadence}>应用节奏</button>
-                  <button type="button" onClick={togglePause}>{invitation.paused ? '恢复邀请' : '暂停邀请'}</button>
-                </div>
-                <div className="product-advance"><span>显式推进演示日</span>
-                  {navigationDays.map((target) => <button type="button" key={target}
-                    onClick={() => advanceDay(target)}>推进到第 {target} 天</button>)}
-                </div>
-                {dynamicNextDay && <p>下次邀请在第 {nextDay} 天；中间日期不会补发。</p>}
-              </details>
             </div>
           </section>
 
           <section className="product-album" aria-label="过往记录" hidden={activeTab !== 'album'}>
-            <div className="product-album-intro screen-only">
-              <div><p className="product-overline">一本只属于本次页面的画册</p>
-                <h2>这些天，你留下了什么</h2><p>日页来自你的原话。翻阅过去不会触发新的提问。</p></div>
-              {album && <button type="button" className="guided-print" onClick={openPrintReminder}>打印当前页 ↗</button>}
-            </div>
-            {recordedDays.length > 0 && <nav className="free-day-nav product-album-days screen-only" aria-label="有记录日期">
-              {recordedDays.map((target) => {
+            {recordedDays.length > 0 && <div className="product-album-bar screen-only">
+              <nav className="free-day-nav product-album-days" aria-label="有记录日期">
+                {recordedDays.map((target) => {
                 const dayAlbum = selectAlbum(journal, target)
                 const correctionCount = dayAlbum?.observations.filter((item) => item.status === 'corrected').length ?? 0
                 return <button type="button" key={target}
                   aria-label={'查看第 ' + target + ' 天'} aria-current={albumDay === target ? 'date' : undefined}
-                  onClick={() => viewRecordedDay(target)}>第 {target} 天<small>{dayAlbum?.entries.length} 条原话
+                  onClick={() => viewRecordedDay(target)}>
+                  <strong>{session.dateForDay(target).slice(5).replace('-', '.')}</strong>
+                  <small>第 {target} 天 · {dayAlbum?.entries.length} 条原话
                     {correctionCount > 0 && ` · ${correctionCount} 条纠正`}</small></button>
-              })}
-            </nav>}
+                })}
+              </nav>
+              {album && <button type="button" className="guided-print" onClick={openPrintReminder}
+                disabled={bookTurn !== null}>打印当前页 ↗</button>}
+            </div>}
             {album ? <>
-              <div className="product-album-page"><AlbumPage mode="private" key={albumDay} album={album}
-                journal={journal} dateForDay={(target) => '第 ' + target + ' 天'} /></div>
-              <section className="free-record-tools product-record-tools screen-only" aria-label="记录管理">
+              <div className="product-album-book-wrap">
+                <div className={`product-album-book${bookTurn ? ` is-turning-${bookTurn.direction}` : ''}`}
+                  role="group" aria-label="双页翻书画册">
+                  <span className="album-book-binding" aria-hidden="true" />
+                  <section className="album-book-page album-book-page-left"
+                    aria-label={bookBasePreviousAlbum ? `第 ${bookBasePreviousAlbum.day} 天画册预览` : '画册扉页'}>
+                    <AlbumPreviewPage album={bookBasePreviousAlbum} openingDay={bookBaseAlbum?.day ?? albumDay}
+                      dateForDay={(target) => session.dateForDay(target)} onOpen={viewRecordedDay} />
+                  </section>
+                  <div className="album-book-page album-book-page-right">
+                    <AlbumPage mode="private" key={bookBaseAlbum?.day ?? albumDay} album={bookBaseAlbum ?? album}
+                      journal={journal} dateForDay={(target) => '第 ' + target + ' 天'}
+                      displayDateForDay={(target) => `演示日期 ${session.dateForDay(target)} · 第 ${target} 天`} />
+                  </div>
+                  {bookTurn && bookTurnTarget && <div className={`album-turn-sheet album-turn-${bookTurn.direction}`}
+                    aria-hidden="true" inert onAnimationEnd={completeBookTurn}>
+                    {bookTurn.direction === 'previous'
+                      ? <div className="album-turn-face album-turn-front album-turn-preview">
+                        <AlbumPreviewPage album={bookBasePreviousAlbum} openingDay={bookTurn.toDay}
+                          dateForDay={(target) => session.dateForDay(target)} />
+                      </div>
+                      : <div className="album-turn-face album-turn-front">
+                        <AlbumPage mode="private" album={album} journal={journal}
+                          dateForDay={(target) => '第 ' + target + ' 天'}
+                          displayDateForDay={(target) => `演示日期 ${session.dateForDay(target)} · 第 ${target} 天`} />
+                      </div>}
+                    <div className="album-turn-face album-turn-back" />
+                  </div>}
+                </div>
+                <div className="album-book-controls screen-only" aria-label="画册翻页控制">
+                  <button type="button" disabled={previousAlbumDay === null || bookTurn !== null}
+                    onClick={() => turnAlbum('previous')} aria-label="翻到前一个有记录日期"><span>←</span> 前一天</button>
+                  <p role="status" aria-live="polite">
+                    <strong>{session.dateForDay(albumDay).slice(5).replace('-', '.')}</strong>
+                    <span>第 {String(selectedDayIndex + 1).padStart(2, '0')} / {String(recordedDays.length).padStart(2, '0')} 页</span>
+                  </p>
+                  <button type="button" disabled={nextAlbumDay === null || bookTurn !== null}
+                    onClick={() => turnAlbum('next')} aria-label="翻到后一个有记录日期">后一天 <span>→</span></button>
+                </div>
+              </div>
+              <details className="product-album-foldout product-album-tools screen-only">
+                <summary><span>页面工具</span><small>3 项 · 整理、对照与提问</small></summary>
+              <section className="free-record-tools product-record-tools" aria-label="记录管理">
                 <h2>管理这一天</h2>
                 <div className="free-title-tools">
                   {editingTitle ? <div className="free-edit-form">
@@ -985,12 +1491,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   </div>}
                 </div>)}
               </section>
-            </> : <div className="product-album-empty screen-only" role="status">
-              <span aria-hidden="true">○</span><h2>画册还没有第一页</h2>
-              <p>回到对话，回答一个问题或主动留下一句，这里就会出现你的日页。</p>
-              <button type="button" onClick={() => setActiveTab('chat')}>去对话</button>
-            </div>}
-            {album && <section className="free-comparison guided-comparison product-comparison screen-only"
+              <section className="free-comparison guided-comparison product-comparison"
               role="region" aria-label="前后两页摘录">
               <div className="guided-comparison-heading"><span className="guided-section-index">与过去相比</span>
                 <h2>前后两页摘录</h2><p>从不同记录日亲手选择两条原话并列；系统不判断话题是否相关，也不推断变化原因。</p></div>
@@ -1021,8 +1522,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 </div>)}
               </div> : <p className="free-insufficient">{earlierEntries.length > 0 && currentPageEntries.length > 0
                 ? '请选择两条原话，看看你自己注意到什么。' : '资料不足，暂时无法对照两天原话。'}</p>}
-            </section>}
-            {album && <section className="free-question-history product-question-history screen-only"
+            </section>
+              <section className="free-question-history product-question-history"
               role="region" aria-label="已回答问题">
               <h2>本日已回答问题</h2>
               {answeredQuestions.length > 0 ? <ol>{answeredQuestions.map((item, index) => <li key={albumDay + '-' + index}>
@@ -1034,17 +1535,33 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   <details className="product-question-evidence"><summary>查看当时发送的片段</summary>
                     <blockquote>“{item.approvedExcerpt}”</blockquote></details>}
               </li>)}</ol> : <p>这一天没有已回答的问题。</p>}
-            </section>}
+            </section>
+              </details>
+            </> : <div className="product-album-empty screen-only" role="status">
+              <span aria-hidden="true">○</span><h2>画册还没有第一页</h2>
+              <p>回到对话，回答一个问题或主动留下一句，这里就会出现你的日页。</p>
+              <button type="button" onClick={() => setActiveTab('chat')}>去对话</button>
+            </div>}
           </section>
 
           <section className="product-data screen-only" aria-label="生活数据" hidden={activeTab !== 'data'}>
             <DataInsights consents={consents} onToggle={toggleConsent} />
           </section>
         </div>
-        <footer className="product-footer screen-only">
-          <p>本地规则默认开启；本机可选连续千问聊天。仅在逐次查看并确认后，所选片段才会离开页面；模拟数据不读取真实设备，也没有账号或长期保存。</p>
-        </footer>
       </div>
+      <dialog ref={detailsDialogRef} className="free-print-dialog product-details-dialog screen-only"
+        aria-labelledby="product-details-title"
+        onCancel={(event) => { event.preventDefault(); closeDetails() }}>
+        <p className="guided-section-index">关于这个演示</p>
+        <h2 id="product-details-title">详情</h2>
+        <dl>
+          <div><dt>目前怎样回应你</dt><dd>默认使用本地规则；在本机选择千问聊天后，每句话仍须单独查看并确认发送内容。</dd></div>
+          <div><dt>内容保存在哪里</dt><dd>原话和画册只保留在本次页面，刷新或点「清除」后消失。模型回复不写成你的日记事实。</dd></div>
+          <div><dt>语音与生活数据</dt><dd>允许麦克风后，语音在浏览器内转成可修改的文字，不会自动发送；生活数据是模拟资料，尚未连接手机或手表。</dd></div>
+          <div><dt>单次云端许可</dt><dd>只有你在确认窗口核对本次 JSON 后，所选片段才会经本机服务发送给百炼／千问。</dd></div>
+        </dl>
+        <button type="button" className="product-details-close" onClick={closeDetails}>知道了</button>
+      </dialog>
       {printPending && <dialog ref={printDialogRef} className="free-print-dialog screen-only" role="dialog"
         aria-modal="true" aria-labelledby="free-print-title"
         onCancel={(event) => { event.preventDefault(); closePrintReminder() }}>

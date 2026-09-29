@@ -275,6 +275,10 @@ async function openChat(page: import('@playwright/test').Page) {
 
 async function openAlbum(page: import('@playwright/test').Page) {
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '画册' }).click()
+  const tools = page.locator('.product-album-tools')
+  if (await tools.count() && !(await tools.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await tools.locator('summary').click()
+  }
 }
 
 async function advanceTo(page: import('@playwright/test').Page, day: number) {
@@ -357,6 +361,7 @@ test('two unanswered invitation days lower cadence without invitations on skippe
   await advanceTo(page, 2)
   await send(page, '今天先不聊了')
   await expect(page.getByRole('status')).toContainText('节奏已调为每周')
+  await page.locator('details.product-settings > summary').click()
   await expect(page.getByRole('combobox', { name: '手动调整节奏' })).toHaveValue('weekly')
   await advanceTo(page, 8)
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('第 8 天不邀请')
@@ -374,6 +379,7 @@ test('declining an optional third question does not count as a missed invitation
   await send(page, '今天先不聊了')
   await advanceTo(page, 2)
   await send(page, '今天先不聊了')
+  await page.locator('details.product-settings > summary').click()
   await expect(page.getByRole('combobox', { name: '手动调整节奏' })).toHaveValue('daily')
   await expect(page.getByRole('status')).not.toContainText('节奏已调为每周')
 })
