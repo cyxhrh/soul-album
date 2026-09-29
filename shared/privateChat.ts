@@ -1,4 +1,4 @@
-/** The only personal text that one consented chat request may carry. */
+/** The only personal text that one bounded chat request may carry. */
 export interface PrivateChatSource {
   kind: 'entry' | 'correction' | 'control'
   id: string
@@ -12,7 +12,7 @@ export interface PrivateChatRequest {
   turn: PrivateChatSource
   /** At most two previously recorded, still-current user-authored fragments. */
   context: PrivateChatSource[]
-  /** The last still-valid generated response, shown in the consent preview. */
+  /** The last still-valid generated response; never a transcript or full album. */
   precedingAssistant?: { reply: string; nextQuestion: string | null }
 }
 

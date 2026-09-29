@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './offline-model'
 
 test('the product opens directly in a private conversation', async ({ page }) => {
   await page.goto('/')
@@ -13,7 +13,7 @@ test('the product opens directly in a private conversation', async ({ page }) =>
   await expect(nav.getByRole('button', { name: '清除本次内容' })).toBeVisible()
   await expect(nav.getByRole('button', { name: '详情' })).toBeVisible()
   await expect(nav.getByRole('button', { name: '对话' })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByText('默认纯本地 · 不使用模型')).toBeVisible()
+  await expect(page.getByText('模型未连接 · 本地记录')).toBeVisible()
   await expect(page.getByRole('textbox', { name: '发送消息' })).toBeVisible()
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: '主动分享' })).toHaveCount(0)

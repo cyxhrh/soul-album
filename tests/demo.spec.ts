@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './offline-model'
 
 test('product and archived demo routes remain usable at phone and desktop widths with reduced motion', async ({ page }) => {
   const errors: string[] = []

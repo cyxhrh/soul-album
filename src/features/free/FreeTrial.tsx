@@ -9,12 +9,8 @@ import { createBrowserLocalSession } from '../../domain/browserLocalSession'
 import { classifyChatIntent } from '../../domain/chatIntent'
 import { selectAlbum, selectAnsweredQuestions, type AlbumView } from '../../domain/selectors'
 import {
-  privateAiAvailableOnThisHost, privateQuestionPreview, requestPrivateQuestion,
-  validPrivateExcerpt, type PrivateQuestionPreview,
-} from './privateQuestion'
-import {
-  currentChatTurns, excerptFromText, privateChatAvailableOnThisHost, PrivateChatRequestError, requestPrivateChat,
-  sourceForMessage, sourceIsCurrent, validChatExcerpt, validChatRequest,
+  currentChatTurns, privateChatAvailableOnThisHost, PrivateChatRequestError, requestPrivateChat,
+  sourceForMessage, sourceIsCurrent, validChatRequest,
   type PrivateChatRequest, type PrivateChatSource, type PrivateChatTurn,
 } from './privateChat'
 import AlbumPage from '../album/AlbumPage'
@@ -29,7 +25,7 @@ type EntryChange =
   | { kind: 'editEntry'; id: string; text: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
   | { kind: 'deleteEntry'; id: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
 type ProductTab = 'chat' | 'album' | 'data'
-type ChatMode = 'local' | 'qwen'
+type ModelConnection = { state: 'checking' | 'ready' | 'offline'; modelName: string | null }
 type BookTurn = { direction: 'next' | 'previous'; fromDay: number; toDay: number }
 type ControlExchange = { id: string; reply: string; promptQuestionId?: string }
 type TimelineItem = { kind: 'entry'; order: number; messageId: string; sentAt: string; entry: Entry } |
@@ -59,7 +55,7 @@ function chatTimeMarker(previous: TimelineItem | undefined, current: TimelineIte
 }
 
 function chatFailureCopy(error: unknown): string {
-  const prefix = '这句仍保存在本页画册，没有自动重试。'
+  const prefix = '你写下的话仍保存在本页，没有自动重试。'
   if (!(error instanceof PrivateChatRequestError)) return `本机千问服务暂时无法连接。${prefix}`
   switch (error.code) {
     case 'invalid_model_output': return `千问已返回，但这次回复未通过格式与引用检查，不能作为可信回应显示。${prefix}`
@@ -73,11 +69,26 @@ function chatFailureCopy(error: unknown): string {
   }
 }
 
-interface ChatPreview {
-  messageId: string
-  turn: PrivateChatSource
-  candidates: PrivateChatSource[]
-  preceding?: PrivateChatTurn
+async function readModelConnection(signal: AbortSignal): Promise<ModelConnection> {
+  if (!privateChatAvailableOnThisHost(window.location.hostname)) {
+    return { state: 'offline', modelName: null }
+  }
+  const response = await fetch('/api/ai/model-status', {
+    signal, cache: 'no-store', credentials: 'omit', redirect: 'error',
+  })
+  if (!response.ok) return { state: 'offline', modelName: null }
+  const raw = await response.text()
+  if (raw.length > 1024) return { state: 'offline', modelName: null }
+  const result: unknown = JSON.parse(raw)
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return { state: 'offline', modelName: null }
+  }
+  const value = result as Record<string, unknown>
+  const model = value.model && typeof value.model === 'object' && !Array.isArray(value.model)
+    ? value.model as Record<string, unknown> : null
+  const modelName = model?.provider === 'qwen' && typeof model.id === 'string' &&
+    /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(model.id) ? model.id : null
+  return { state: value.status === 'ready' && modelName ? 'ready' : 'offline', modelName }
 }
 
 function nextDueDay(state: InvitationState, afterDay: number): number | null {
@@ -120,12 +131,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [snapshot, setSnapshot] = useState(() => session.read())
   const journal = session.projectJournal(snapshot)
   const [activeTab, setActiveTab] = useState<ProductTab>('chat')
-  const [chatMode, setChatMode] = useState<ChatMode>('local')
+  const [modelConnection, setModelConnection] = useState<ModelConnection>(() => ({
+    state: privateChatAvailableOnThisHost(window.location.hostname) ? 'checking' : 'offline',
+    modelName: null,
+  }))
   const [chatTurns, setChatTurns] = useState<PrivateChatTurn[]>([])
-  const [chatPreview, setChatPreview] = useState<ChatPreview | null>(null)
-  const [chatQuote, setChatQuote] = useState('')
-  const [chatContextIds, setChatContextIds] = useState<string[]>([])
-  const [chatIncludePreceding, setChatIncludePreceding] = useState(true)
   const [chatRequestPending, setChatRequestPending] = useState(false)
   const [chatError, setChatError] = useState('')
   const [controlExchanges, setControlExchanges] = useState<ControlExchange[]>([])
@@ -152,10 +162,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [status, setStatus] = useState('')
   const [printPending, setPrintPending] = useState(false)
   const [pendingEntryChange, setPendingEntryChange] = useState<EntryChange | null>(null)
-  const [privatePreview, setPrivatePreview] = useState<PrivateQuestionPreview | null>(null)
-  const [privateQuote, setPrivateQuote] = useState('')
-  const [privatePending, setPrivatePending] = useState(false)
-  const [privateError, setPrivateError] = useState('')
   const [correctingQuestion, setCorrectingQuestion] = useState(false)
   const [correctionDraft, setCorrectionDraft] = useState('')
   const [comparisonFirstId, setComparisonFirstId] = useState('')
@@ -167,12 +173,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const titleConfirmFocusReturnRef = useRef<'opener' | 'status' | null>(null)
   const statusRef = useRef<HTMLParagraphElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
-  const privateDialogRef = useRef<HTMLDialogElement>(null)
-  const privateOpenerRef = useRef<HTMLElement | null>(null)
-  const privateControllerRef = useRef<AbortController | null>(null)
-  const chatDialogRef = useRef<HTMLDialogElement>(null)
-  const chatOpenerRef = useRef<HTMLElement | null>(null)
   const chatControllerRef = useRef<AbortController | null>(null)
+  const modelStatusControllerRef = useRef<AbortController | null>(null)
+  const sendLockRef = useRef(false)
+  const sendGenerationRef = useRef(0)
   const detailsDialogRef = useRef<HTMLDialogElement>(null)
   const detailsTriggerRef = useRef<HTMLButtonElement>(null)
   const settingsRef = useRef<HTMLDetailsElement>(null)
@@ -196,37 +200,28 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const voiceDisposedRef = useRef(false)
 
   useEffect(() => () => {
-    privateControllerRef.current?.abort()
+    sendGenerationRef.current += 1
+    sendLockRef.current = false
     chatControllerRef.current?.abort()
+    modelStatusControllerRef.current?.abort()
     if (replyTimerRef.current !== null) window.clearTimeout(replyTimerRef.current)
     if (bookTurnTimerRef.current !== null) window.clearTimeout(bookTurnTimerRef.current)
   }, [])
 
-  useLayoutEffect(() => {
-    if (!chatPreview) {
-      if (chatOpenerRef.current?.isConnected) chatOpenerRef.current.focus()
-      chatOpenerRef.current = null
-      return
+  useEffect(() => {
+    if (!privateChatAvailableOnThisHost(window.location.hostname)) return
+    const controller = new AbortController()
+    modelStatusControllerRef.current = controller
+    void readModelConnection(controller.signal)
+      .then((connection) => { if (!controller.signal.aborted) setModelConnection(connection) })
+      .catch(() => {
+        if (!controller.signal.aborted) setModelConnection({ state: 'offline', modelName: null })
+      })
+    return () => {
+      controller.abort()
+      if (modelStatusControllerRef.current === controller) modelStatusControllerRef.current = null
     }
-    const dialog = chatDialogRef.current
-    if (!dialog) return
-    if (!dialog.open) dialog.showModal()
-    dialog.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
-    return () => { if (dialog.open) dialog.close() }
-  }, [chatPreview])
-
-  useLayoutEffect(() => {
-    if (!privatePreview) {
-      if (privateOpenerRef.current?.isConnected) privateOpenerRef.current.focus()
-      privateOpenerRef.current = null
-      return
-    }
-    const dialog = privateDialogRef.current
-    if (!dialog) return
-    if (!dialog.open) dialog.showModal()
-    dialog.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
-    return () => { if (dialog.open) dialog.close() }
-  }, [privatePreview])
+  }, [])
 
   useEffect(() => {
     voiceDisposedRef.current = false
@@ -604,8 +599,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const activeQuestion = snapshot.questions.find((question) => question.id === activeQuestionId)
   const visibleQuestionText = activeQuestion?.text ?? ''
   const activeQuestionMode = activeQuestion?.provenance === 'cloud_model' ? '千问提议' : '规则模式'
-  const privateCandidate = privateAiAvailableOnThisHost(window.location.hostname)
-    ? privateQuestionPreview(snapshot, activeQuestion) : null
   function entrySourcePreview(entryId: string | undefined, revision: number | undefined): string | null {
     if (!entryId || revision === undefined) return null
     const source = snapshot.entries.find((entry) => entry.id === entryId && entry.revision === revision)
@@ -656,18 +649,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const controlsById = new Map(controlExchanges.map((exchange) => [exchange.id, exchange]))
   const visibleChatTurns = currentChatTurns(snapshot, chatTurns)
   const chatTurnByMessageId = new Map(visibleChatTurns.map((turn) => [turn.messageId, turn]))
-  const chatRequest: PrivateChatRequest | null = chatPreview ? {
-    turn: { ...chatPreview.turn, quote: chatQuote },
-    context: chatPreview.candidates.filter((source) => chatContextIds.includes(source.id)),
-    ...(chatIncludePreceding && chatPreview.preceding ? { precedingAssistant: {
-      reply: chatPreview.preceding.response.reply,
-      nextQuestion: chatPreview.preceding.response.nextQuestion,
-    } } : {}),
-  } : null
-  const chatTurnOriginal = chatPreview?.turn.kind === 'entry'
-    ? snapshot.entries.find((entry) => entry.id === chatPreview.turn.id)?.text ?? ''
-    : chatPreview?.turn.kind === 'control'
-      ? snapshot.messages.find((message) => message.id === chatPreview.turn.id)?.controlText ?? '' : ''
   const conversationTimeline: TimelineItem[] = session.projectMessages(snapshot)
     .flatMap((message): TimelineItem[] => {
       if (message.entryId) {
@@ -689,7 +670,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     if (activeTab !== 'chat' || !chatScrollRef.current) return
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
   }, [activeTab, day, journal.entries.length, controlExchanges.length, questionIndex, extraQuestion,
-    chatTurns.length, chatMode, chatPreview, typingMessageId])
+    chatTurns.length, modelConnection.state, typingMessageId])
 
   useEffect(() => {
     setChatTurns((current) => {
@@ -702,177 +683,92 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setSnapshot(session.read())
   }
 
-  function openPrivateQuestionGate() {
-    const candidate = privateQuestionPreview(session.read(),
-      session.read().questions.find((question) => question.id === activeQuestionId))
-    if (!candidate || !privateAiAvailableOnThisHost(window.location.hostname)) {
-      setStatus('这条问题的来源已变化，继续使用本地规则问题。')
-      refresh()
-      return
-    }
-    privateOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setPrivateQuote(candidate.quote)
-    setPrivateError('')
-    setPrivatePreview(candidate)
-  }
-
-  function closePrivateQuestionGate() {
-    privateControllerRef.current?.abort()
-    privateControllerRef.current = null
-    setPrivatePending(false)
-    setPrivatePreview(null)
-    setPrivateQuote('')
-    setPrivateError('')
-  }
-
-  async function confirmPrivateQuestion() {
-    const preview = privatePreview
-    if (!preview || privatePending) return
-    if (!validPrivateExcerpt(preview.original, privateQuote)) {
-      setPrivateError('只能发送当前原话中连续、逐字一致的片段；如需改写，请先修改画册原话。')
-      return
-    }
-    const latest = session.read()
-    const currentQuestion = latest.questions.find((question) => question.id === preview.questionId)
-    const currentEntry = latest.entries.find((entry) => entry.id === preview.entryCitation.id)
-    if (latest.revision !== preview.expectedSpaceRevision ||
-      currentQuestion?.revision !== preview.expectedQuestionRevision ||
-      currentQuestion.status !== 'ready' || currentQuestion.id !== activeQuestionId ||
-      currentEntry?.revision !== preview.entryCitation.revision ||
-      !currentEntry.text.includes(privateQuote)) {
-      closePrivateQuestionGate()
-      refresh()
-      setStatus('原话或问题已变化，本次许可失效；规则问题仍在。')
-      return
-    }
-    const controller = new AbortController()
-    privateControllerRef.current = controller
-    setPrivatePending(true)
-    setPrivateError('')
-    try {
-      const proposal = await requestPrivateQuestion(preview, privateQuote, controller.signal)
-      if (controller.signal.aborted) return
-      session.adoptCloudQuestion({
-        expectedSpaceRevision: preview.expectedSpaceRevision,
-        questionId: preview.questionId,
-        expectedQuestionRevision: preview.expectedQuestionRevision,
-        entryCitation: preview.entryCitation,
-        entryQuote: privateQuote,
-        text: proposal.question,
-      })
-      refresh()
-      closePrivateQuestionGate()
-      setStatus('千问提议了下一问，已保留关联原话；若理解偏了，可以纠正。')
-    } catch {
-      if (controller.signal.aborted) return
-      closePrivateQuestionGate()
-      setStatus('这次模型提问未完成，规则问题仍在；没有自动重试。')
-    } finally {
-      if (privateControllerRef.current === controller) privateControllerRef.current = null
-      setPrivatePending(false)
-    }
-  }
-
-  function closeChatGate() {
+  function cancelPendingChat() {
+    sendGenerationRef.current += 1
+    sendLockRef.current = false
+    modelStatusControllerRef.current?.abort()
+    modelStatusControllerRef.current = null
     chatControllerRef.current?.abort()
     chatControllerRef.current = null
     if (replyTimerRef.current !== null) window.clearTimeout(replyTimerRef.current)
     replyTimerRef.current = null
     setTypingMessageId(null)
     setChatRequestPending(false)
-    setChatPreview(null)
-    setChatQuote('')
-    setChatContextIds([])
     setChatError('')
   }
 
-  function openChatGate(messageId: string) {
+  async function requestModelReply(messageId: string, generation: number) {
     const latest = session.read()
     const messages = session.projectMessages(latest)
     const message = messages.find((item) => item.id === messageId)
-    if (!message || !privateChatAvailableOnThisHost(window.location.hostname)) {
-      setStatus('本次内容已保存在本页；当前地址无法连接私人千问聊天。')
-      return
-    }
-    const source = sourceForMessage(latest, message, session.dayForTimestamp(message.occurredAt))
-    if (!source || !sourceIsCurrent(latest, source)) {
-      setStatus('这条原话已变化，暂时只保留本地记录。')
-      return
-    }
-    const previous = messages.filter((item) => item.sequence < message.sequence).reverse()
-      .map((item) => sourceForMessage(latest, item, session.dayForTimestamp(item.occurredAt)))
+    if (!message) return
+    const messageDay = session.dayForTimestamp(message.occurredAt)
+    const turn = sourceForMessage(latest, message, messageDay)
+    if (!turn || !sourceIsCurrent(latest, turn)) return
+    const validPreviousTurns = currentChatTurns(latest, chatTurns)
+    const previouslySentMessageIds = new Set(validPreviousTurns.map((item) => item.messageId))
+    const context = messages.filter((item) => item.sequence < message.sequence &&
+      session.dayForTimestamp(item.occurredAt) === messageDay &&
+      previouslySentMessageIds.has(item.id)).reverse()
+      .map((item) => sourceForMessage(latest, item, messageDay))
       .filter((item): item is PrivateChatSource => !!item && sourceIsCurrent(latest, item))
-    const corrections: PrivateChatSource[] = [...latest.observations].reverse()
-      .filter((item) => item.status === 'user_corrected')
-      .map((item) => ({
-        kind: 'correction' as const, id: item.id, revision: item.revision,
-        day: session.dayForDate(item.journalDate ?? session.dateForDay(day)),
-        quote: excerptFromText(item.text),
-      }))
-      .filter((item) => sourceIsCurrent(latest, item))
-    const candidates = [...corrections, ...previous]
-      .filter((item, index, all) => item.id !== source.id && all.findIndex((other) => other.id === item.id) === index)
       .slice(0, 2)
-    const preceding = currentChatTurns(latest, chatTurns).at(-1)
-    chatOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    setChatPreview({ messageId, turn: source, candidates, preceding })
-    setChatQuote(source.quote)
-    setChatContextIds(candidates.map((item) => item.id))
-    setChatIncludePreceding(true)
-    setChatError('')
-    setStatus('已保存在本页；查看本次内容后，才会发送给千问。')
-  }
-
-  async function confirmChat() {
-    const preview = chatPreview
-    const request = chatRequest
-    if (!preview || !request || chatRequestPending) return
-    const latest = session.read()
-    const preceding = preview.preceding && currentChatTurns(latest, chatTurns)
-      .find((turn) => turn.messageId === preview.preceding?.messageId)
-    const original = preview.turn.kind === 'entry'
-      ? latest.entries.find((item) => item.id === preview.turn.id)?.text ?? ''
-      : latest.messages.find((item) => item.id === preview.turn.id)?.controlText ?? ''
-    if (!validChatExcerpt(original, chatQuote) ||
-      !validChatRequest(request) ||
-      ![request.turn, ...request.context].every((source) => sourceIsCurrent(latest, source)) ||
-      !latest.messages.some((message) => message.id === preview.messageId) ||
-      (request.precedingAssistant && !preceding)) {
-      setChatError('原话或上下文已变化，请仅保留本地内容，重新发送新消息。')
+    const preceding = validPreviousTurns.filter((item) => {
+      const sourceMessage = messages.find((candidate) => candidate.id === item.messageId)
+      return !!sourceMessage && session.dayForTimestamp(sourceMessage.occurredAt) === messageDay
+    }).at(-1)
+    const request: PrivateChatRequest = {
+      turn, context,
+      ...(preceding ? { precedingAssistant: {
+        reply: preceding.response.reply, nextQuestion: preceding.response.nextQuestion,
+      } } : {}),
+    }
+    if (!validChatRequest(request)) {
+      const error = '这句已保存在本页，但长度或上下文超出模型请求范围，没有自动发送。'
+      setChatError(error)
+      setStatus(error)
       return
     }
     const controller = new AbortController()
     chatControllerRef.current = controller
-    setChatRequestPending(true)
-    setTypingMessageId(preview.messageId)
-    setChatError('')
+    setTypingMessageId(messageId)
     try {
       const response = await requestPrivateChat(request, controller.signal)
-      if (controller.signal.aborted || chatControllerRef.current !== controller) return
+      if (controller.signal.aborted || chatControllerRef.current !== controller ||
+        sendGenerationRef.current !== generation) return
       const current = session.read()
-      if (![request.turn, ...request.context].every((source) => sourceIsCurrent(current, source)) ||
-        !current.messages.some((message) => message.id === preview.messageId) ||
-        (request.precedingAssistant && !currentChatTurns(current, chatTurns)
-          .some((turn) => turn.messageId === preceding?.messageId))) {
-        closeChatGate()
-        setStatus('发送后记录或上下文发生了变化；这次模型结果已撤下。')
+      const sourceStillCurrent = [request.turn, ...request.context]
+        .every((source) => sourceIsCurrent(current, source))
+      const precedingStillCurrent = !request.precedingAssistant ||
+        currentChatTurns(current, chatTurns).some((item) => item.messageId === preceding?.messageId)
+      if (!sourceStillCurrent || !precedingStillCurrent ||
+        !current.messages.some((item) => item.id === messageId)) {
+        const error = '等待回复时原话或上下文已变化；这次模型结果没有显示。'
+        setChatError(error)
+        setStatus(error)
         return
       }
-      const turn: PrivateChatTurn = {
-        messageId: preview.messageId, request, response,
-        ...(request.precedingAssistant && preceding ? { precedingMessageId: preceding.messageId } : {}),
+      const result: PrivateChatTurn = {
+        messageId, request, response,
+        ...(preceding ? { precedingMessageId: preceding.messageId } : {}),
       }
-      setChatTurns((existing) => [...currentChatTurns(current, existing), turn])
-      closeChatGate()
-      setStatus('千问已回复。下一句仍由你决定是否单次发送，模型回应不会写成画册事实。')
+      setChatTurns((existing) => [...currentChatTurns(current, existing), result])
+      setModelConnection({ state: 'ready', modelName: response.model.id })
+      setChatError('')
+      setStatus('模型已回复；回复不会写成你的画册事实。')
     } catch (error) {
-      if (controller.signal.aborted) return
-      closeChatGate()
-      setStatus(chatFailureCopy(error))
+      if (controller.signal.aborted || sendGenerationRef.current !== generation) return
+      const safeError = chatFailureCopy(error)
+      setChatError(safeError)
+      setStatus(safeError)
+      if (!(error instanceof PrivateChatRequestError) ||
+        ['model_not_configured', 'model_unavailable', 'model_timeout', 'rate_limited'].includes(error.code)) {
+        setModelConnection((current) => ({ ...current, state: 'offline' }))
+      }
     } finally {
       if (chatControllerRef.current === controller) {
         chatControllerRef.current = null
-        setChatRequestPending(false)
+        setTypingMessageId(null)
       }
     }
   }
@@ -991,7 +887,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       settingsRef.current.open = false
       settingsRef.current.querySelector('summary')?.focus()
     }
-    closeChatGate()
+    cancelPendingChat()
     viewRecordedDay(target)
     const settled = settleInvitation(invitation, day, answeredInRound)
     const next = isInvitationDue(settled, target) ? markInvitationShown(settled, target) : settled
@@ -1021,27 +917,55 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     }, REPLY_DELAY_MS)
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     const text = draft.trim()
-    if (!text || typingMessageId || voiceState !== 'idle') return
+    if (!text || sendLockRef.current || typingMessageId || voiceState !== 'idle') return
+    sendLockRef.current = true
+    const generation = ++sendGenerationRef.current
+    setChatRequestPending(true)
+    setChatError('')
+    setDraft('')
+    try {
+    let connection = modelConnection
+    if (privateChatAvailableOnThisHost(window.location.hostname) && connection.state !== 'ready') {
+      modelStatusControllerRef.current?.abort()
+      const probe = new AbortController()
+      modelStatusControllerRef.current = probe
+      const timeout = window.setTimeout(() => probe.abort(), 1800)
+      try {
+        connection = await readModelConnection(probe.signal)
+      } catch {
+        connection = { state: 'offline', modelName: connection.modelName }
+      } finally {
+        window.clearTimeout(timeout)
+        if (modelStatusControllerRef.current === probe) modelStatusControllerRef.current = null
+      }
+      if (voiceDisposedRef.current) return
+      if (sendGenerationRef.current !== generation) {
+        setDraft((current) => current || text)
+        return
+      }
+      setModelConnection(connection)
+    }
+    const useModel = connection.state === 'ready'
     const intent = classifyChatIntent(text)
-    const promptId = chatMode === 'local' && (due || extraQuestion) ? activeQuestionId : null
+    const promptId = !useModel && (due || extraQuestion) ? activeQuestionId : null
     let result: ReturnType<typeof session.sendMessage>
     try {
       result = session.sendMessage(day, text, promptId)
     } catch {
+      setDraft((current) => current || text)
       setStatus('这句话暂时没有保存，请重试。')
       return
     }
-    setDraft('')
     refresh()
     if (result.entry) setViewedDay(day)
-    if (chatMode === 'qwen') {
+    if (useModel) {
       if (result.entry) {
         setInvitation(shareProactively(invitation))
         setAnsweredInRound(true)
       }
-      openChatGate(result.message.id)
+      await requestModelReply(result.message.id, generation)
       return
     }
     if (intent === 'skip' || intent === 'decline') {
@@ -1078,6 +1002,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     }
     if (intent === 'share' || (!due && !extraQuestion)) share()
     else { beginLocalReply(result.message.id); answerQuestion() }
+    } finally {
+      if (sendGenerationRef.current === generation) {
+        sendLockRef.current = false
+        setChatRequestPending(false)
+      }
+    }
   }
 
   function applyEntryChange(change: EntryChange) {
@@ -1094,7 +1024,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       return
     }
     try {
-      closeChatGate()
+      cancelPendingChat()
       if (change.kind === 'editEntry') session.editEntry(change.id, change.text)
       else session.deleteEntry(change.id)
       setChatTurns((existing) => currentChatTurns(session.read(), existing))
@@ -1215,17 +1145,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         {status && <p ref={statusRef} className="free-status product-status screen-only" role="status" tabIndex={-1}>{status}</p>}
         <div className="product-content">
           <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat'}>
-            {privateChatAvailableOnThisHost(window.location.hostname) && <div className="product-chat-modes" role="group" aria-label="对话方式">
-              <button type="button" aria-pressed={chatMode === 'qwen'} onClick={() => {
-                if (chatMode === 'qwen') return
-                closeChatGate(); setChatMode('qwen'); setStatus('已进入千问聊天。每句话先留在本页；预览并确认后才会发送给模型。')
-              }}>千问聊天</button>
-              <button type="button" aria-pressed={chatMode === 'local'} onClick={() => {
-                if (chatMode === 'local') return
-                closeChatGate(); setChatMode('local'); setStatus('已切回本地规则体验，不会自动发送给模型。')
-              }}>本地规则</button>
-              <span>{chatMode === 'qwen' ? '每次发送单独授权 · 可连续聊天' : '默认纯本地 · 不使用模型'}</span>
-            </div>}
+            <div className="product-chat-modes" aria-label="模型状态" aria-live="polite">
+              <span>{modelConnection.state === 'checking' ? '正在检查本机模型…' :
+                modelConnection.state === 'ready' ? `当前模型：${modelConnection.modelName}（本机已配置）` :
+                  modelConnection.modelName ? `当前模型：${modelConnection.modelName}（暂不可用）` :
+                    '模型未连接 · 本地记录'}</span>
+            </div>
             <div className="product-chat-scroll" ref={chatScrollRef}>
               {conversationDays.map(({ day: conversationDay, items }) => <section className="product-chat-day"
                 aria-label={'第 ' + conversationDay + ' 天对话'} key={conversationDay}>
@@ -1248,7 +1173,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       <div className="product-bubble"><p>{item.exchange.reply}</p></div></div>}
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
-                      <div className="product-bubble product-ai-reply"><small>千问 · 本次授权生成</small>
+                      <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
                           <p className="product-ai-followup">{chatTurnByMessageId.get(item.messageId)!.response.nextQuestion}</p>}
@@ -1280,7 +1205,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     </div></div>
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
-                      <div className="product-bubble product-ai-reply"><small>千问 · 本次授权生成</small>
+                      <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
                           <p className="product-ai-followup">{chatTurnByMessageId.get(item.messageId)!.response.nextQuestion}</p>}
@@ -1294,7 +1219,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   aria-label="你补充的纠正" key={correction.id}>
                   <div className="product-bubble"><small>你补充的准确背景 · 仅留本页</small><p>{correction.text}</p></div>
                 </div>)}
-                {conversationDay === day && chatMode === 'local' && !typingMessageId && (due || extraQuestion) && <div className="product-bubble-row agent current">
+                {conversationDay === day && modelConnection.state === 'offline' && !chatError &&
+                  !typingMessageId && (due || extraQuestion) && <div className="product-bubble-row agent current">
                   <span className="product-avatar" aria-hidden="true">画</span>
                   <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'} · {activeQuestionMode}</small>
                     <p>{visibleQuestionText}</p>
@@ -1302,8 +1228,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     {activeQuestion?.provenance === 'cloud_model' && activeQuestion.approvedExcerpt &&
                       <details className="product-question-evidence"><summary>查看这次发送给千问的片段</summary>
                         <blockquote>“{activeQuestion.approvedExcerpt}”</blockquote></details>}
-                    {privateCandidate && <button type="button" className="product-question-action" onClick={openPrivateQuestionGate}>
-                      让千问提议这一问</button>}
                     {activeQuestion?.provenance === 'cloud_model' && <div className="product-question-correction">
                       {!correctingQuestion ? <button type="button" className="product-question-action" onClick={() => setCorrectingQuestion(true)}>理解偏了？补充背景</button> : <>
                         <label htmlFor="private-correction">哪里不准确？用你的话写下更准确的背景</label>
@@ -1314,16 +1238,18 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       </>}
                     </div>}</div>
                 </div>}
-                {conversationDay === day && chatMode === 'local' && !typingMessageId && !due && !extraQuestion && <div className="product-rest" role="note">
+                {conversationDay === day && modelConnection.state === 'offline' && !chatError &&
+                  !typingMessageId && !due && !extraQuestion && <div className="product-rest" role="note">
                   <strong>{roundClosed ? '今天的邀请已结束' : '第 ' + day + ' 天不邀请'}</strong>
                   <p>{roundClosed ? '今天可以停在这里，也可以自己再记一句。' :
                     '未展示的日期不会补发问题；想记事时仍可直接留言。'}</p>
                   {!roundClosed && cadence === 'weekly' && nextDay !== null && <p className="product-next-hint">下次邀请在第 {nextDay} 天</p>}
                 </div>}
-                {conversationDay === day && chatMode === 'qwen' && items.length === 0 && <div className="product-rest" role="note">
+                {conversationDay === day && items.length === 0 && <div className="product-rest" role="note">
                   <strong>想说什么，直接写在下面</strong>
-                  <p>先保存在本页，再由你决定这次是否发给千问。它可以回应你，也可以选择不追问。</p>
+                  <p>本机模型已配置时，发送本句前 800 字、同日最近最多两条已发给模型的对话文字与上一条有效回复；不补发离线记录或生活数据。服务方可能按其政策保存调用内容。</p>
                 </div>}
+                {conversationDay === day && chatError && <div className="product-rest" role="alert"><p>{chatError}</p></div>}
                 {conversationDay === day && typingMessageId && <div className="product-bubble-row agent product-typing" aria-live="polite">
                   <span className="product-avatar" aria-hidden="true">画</span>
                   <div className="product-bubble"><span>画册正在输入</span>
@@ -1341,7 +1267,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       onChange={(event) => setDraft(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-                          event.preventDefault(); sendMessage()
+                          event.preventDefault(); void sendMessage()
                         }
                       }} rows={2} placeholder="想说什么，直接写在这里…" />
                   </> : voiceState === 'recording' ? <div className="product-voice-panel">
@@ -1385,7 +1311,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   <div className="product-composer-actions">
                   <button type="button" className="product-voice" ref={voiceButtonRef}
                     onClick={() => void toggleVoiceRecording()}
-                    disabled={(voiceState !== 'idle' && voiceState !== 'recording') || !!chatPreview || chatRequestPending}
+                    disabled={(voiceState !== 'idle' && voiceState !== 'recording') || chatRequestPending}
                     aria-pressed={voiceState === 'recording'} aria-busy={voiceState === 'transcribing'}
                     aria-label={voiceState === 'recording' ? '结束聆听并转成文字' :
                       voiceState === 'transcribing' ? '正在转写' : '开始语音输入'}
@@ -1397,8 +1323,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                         <path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8" />
                       </svg>}
                   </button>
-                  <button type="button" className="product-send" onClick={sendMessage}
-                    disabled={!draft.trim() || !!chatPreview || chatRequestPending || !!typingMessageId || voiceState !== 'idle'}>发送</button>
+                  <button type="button" className="product-send" onClick={() => void sendMessage()}
+                    disabled={!draft.trim() || chatRequestPending || !!typingMessageId || voiceState !== 'idle'}>发送</button>
                   </div>
                 </div>
                 {voiceMessage && <p className="product-composer-note" role="status" aria-live="polite">{voiceMessage}</p>}
@@ -1555,10 +1481,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         <p className="guided-section-index">关于这个演示</p>
         <h2 id="product-details-title">详情</h2>
         <dl>
-          <div><dt>目前怎样回应你</dt><dd>默认使用本地规则；在本机选择千问聊天后，每句话仍须单独查看并确认发送内容。</dd></div>
+          <div><dt>目前怎样回应你</dt><dd>本机模型服务已配置时直接请求当前模型；未连接时使用本地规则。模型请求失败只保留原话，不补造回复，也不自动重试。</dd></div>
           <div><dt>内容保存在哪里</dt><dd>原话和画册只保留在本次页面，刷新或点「清除」后消失。模型回复不写成你的日记事实。</dd></div>
           <div><dt>语音与生活数据</dt><dd>允许麦克风后，语音在浏览器内转成可修改的文字，不会自动发送；生活数据是模拟资料，尚未连接手机或手表。</dd></div>
-          <div><dt>单次云端许可</dt><dd>只有你在确认窗口核对本次 JSON 后，所选片段才会经本机服务发送给百炼／千问。</dd></div>
+          <div><dt>模型发送范围</dt><dd>每次仅发送本句前 800 字、同日最近最多两条已发送且仍有效的对话文字，以及上一条有效模型回复。不会自动补发离线时期的记录、整本画册或设备数据。本机服务会将这些文字转给阿里云百炼／千问；服务方可能按其政策保存调用内容。</dd></div>
         </dl>
         <button type="button" className="product-details-close" onClick={closeDetails}>知道了</button>
       </dialog>
@@ -1588,61 +1514,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
             取消{pendingEntryChange.kind === 'editEntry' ? '修改' : '删除'}</button>
           <button type="button" onClick={() => applyEntryChange(pendingEntryChange)}>
             继续{pendingEntryChange.kind === 'editEntry' ? '修改' : '删除'}</button>
-        </div>
-      </dialog>}
-      {privatePreview && <dialog ref={privateDialogRef} className="free-print-dialog product-private-dialog screen-only"
-        role="dialog" aria-modal="true" aria-labelledby="private-question-title"
-        onCancel={(event) => { event.preventDefault(); closePrivateQuestionGate() }}>
-        <p className="guided-section-index">单次隐私授权</p><h2 id="private-question-title">让千问提议这一问</h2>
-        <p>这一次只把下方片段、来源标识与修订版本送到本机服务；本机向阿里云百炼／千问转发片段和来源标识，不转发修订版本。内容会离开本次页面；服务方可能按其政策存储调用数据。其他画册记录、设备资料不会随这次请求发送。</p>
-        <label htmlFor="private-question-quote">实际发送的原话片段（可删减为原话中连续的一段）</label>
-        <textarea id="private-question-quote" value={privateQuote} maxLength={800} rows={5}
-          disabled={privatePending} onChange={(event) => { setPrivateQuote(event.target.value); setPrivateError('') }} />
-        <details><summary>查看完整请求内容</summary><pre>{JSON.stringify({ entry: {
-          id: privatePreview.entryCitation.id, revision: privatePreview.entryCitation.revision, quote: privateQuote,
-        } }, null, 2)}</pre></details>
-        <p>同意仅用于眼前这一问，不会开启自动发送。取消后继续使用当前规则问题。</p>
-        {privateError && <p role="alert">{privateError}</p>}
-        {privatePending && <p role="status">请求已发出。取消只放弃采纳结果；已发送内容无法撤回，也可能产生调用费用。</p>}
-        <div className="free-print-actions">
-          <button type="button" autoFocus onClick={closePrivateQuestionGate}>仅保留本地问题</button>
-          <button type="button" disabled={privatePending || !validPrivateExcerpt(privatePreview.original, privateQuote)}
-            onClick={() => void confirmPrivateQuestion()}>同意并发送这一次</button>
-        </div>
-      </dialog>}
-      {chatPreview && <dialog ref={chatDialogRef} className="free-print-dialog product-private-dialog product-chat-dialog screen-only"
-        role="dialog" aria-modal="true" aria-labelledby="private-chat-title"
-        onCancel={(event) => { event.preventDefault(); closeChatGate() }}>
-        <p className="guided-section-index">千问聊天 · 单次隐私授权</p><h2 id="private-chat-title">查看这一次发给千问的内容</h2>
-        <p>消息已保存在本页。只有本次确认后，所选片段才经本机发给阿里云百炼／千问；服务方可能存储调用数据。取消只保留本地，下次不会自动发送。</p>
-        <label htmlFor="private-chat-quote">这句发给千问的片段（可缩短为原话中连续的一段）</label>
-        <textarea id="private-chat-quote" value={chatQuote} rows={2} maxLength={800}
-          disabled={chatRequestPending} onChange={(event) => { setChatQuote(event.target.value); setChatError('') }} />
-        {chatPreview.candidates.length > 0 && <fieldset className="product-chat-context">
-          <legend>可选历史上下文 · 最多两条</legend>
-          {chatPreview.candidates.map((source) => <label key={source.id}>
-            <input type="checkbox" checked={chatContextIds.includes(source.id)} disabled={chatRequestPending}
-              onChange={(event) => setChatContextIds((current) => event.target.checked
-                ? [...current, source.id] : current.filter((id) => id !== source.id))} />
-            <span>第 {source.day} 天 · {source.kind === 'correction' ? '你纠正的背景' : '你的原话'}：{source.quote}</span>
-          </label>)}
-        </fieldset>}
-        {chatPreview.preceding && <label className="product-chat-preceding">
-          <input type="checkbox" checked={chatIncludePreceding} disabled={chatRequestPending}
-            onChange={(event) => setChatIncludePreceding(event.target.checked)} />
-          <span>带上上一条有效的千问回复与追问：{chatPreview.preceding.response.reply}
-            {chatPreview.preceding.response.nextQuestion && ` / ${chatPreview.preceding.response.nextQuestion}`}</span>
-        </label>}
-        <p>本机只发送下方 JSON 中的本句、勾选的上下文与上次回复；不会发送整本画册、设备数据或未勾选的记录。</p>
-        <strong className="product-chat-payload-heading">本次实际请求</strong>
-        <pre className="product-chat-payload">{JSON.stringify(chatRequest, null, 2)}</pre>
-        {chatError && <p role="alert">{chatError}</p>}
-        {chatRequestPending && <p role="status">正在等待千问回复。取消会放弃结果并尝试中止请求；已经发送的内容无法撤回，也可能产生费用。</p>}
-        <div className="free-print-actions">
-          <button type="button" autoFocus onClick={() => { closeChatGate(); setStatus('这句仅保存在本页，没有发送给千问。') }}>仅保留本地</button>
-          <button type="button" disabled={chatRequestPending || !chatRequest ||
-            !validChatExcerpt(chatTurnOriginal, chatQuote) || !validChatRequest(chatRequest)}
-          onClick={() => void confirmChat()}>同意并发送这一次</button>
         </div>
       </dialog>}
     </main>

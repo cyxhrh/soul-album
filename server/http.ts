@@ -9,6 +9,7 @@ import type { PrivateChatRequest, PrivateChatResponse, PrivateChatSource } from 
 const API_PATH = '/api/ai/synthetic-question'
 const PRIVATE_API_PATH = '/api/ai/private-question'
 const PRIVATE_CHAT_PATH = '/api/ai/private-chat'
+const MODEL_STATUS_PATH = '/api/ai/model-status'
 const MAX_BODY_BYTES = 256
 const MAX_PRIVATE_BODY_BYTES = 4_096
 const MAX_PRIVATE_CHAT_BODY_BYTES = 12_288
@@ -400,16 +401,29 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
   const timeoutMs = options.timeoutMs ?? 25_000
 
   const server = createServer(async (request, response) => {
+    const isModelStatus = request.url === MODEL_STATUS_PATH
     const isPrivate = request.url === PRIVATE_API_PATH
     const isChat = request.url === PRIVATE_CHAT_PATH
     const kind = isChat ? 'chat' : isPrivate ? 'question' : 'synthetic'
-    if (request.url !== API_PATH && !isPrivate && !isChat) {
+    if (request.url !== API_PATH && !isPrivate && !isChat && !isModelStatus) {
       await serveStatic(request, response, options.distDir)
       return
     }
     if (!isLoopbackHost(request.headers.host) ||
       !isSameLoopbackOrigin(request.headers.origin, request.headers.host)) {
       writeError(response, 400, 'invalid_request', kind)
+      return
+    }
+    if (isModelStatus) {
+      if (request.method !== 'GET') {
+        writeError(response, 400, 'invalid_request', kind)
+        return
+      }
+      const chatProvider = options.privateChatEnabled === true ? options.privateChatProvider : undefined
+      writeJson(response, 200, {
+        status: chatProvider && modelCalls < maxCalls ? 'ready' : 'unavailable',
+        model: chatProvider ? { provider: chatProvider.provider, id: chatProvider.id } : null,
+      })
       return
     }
     if (request.method !== 'POST' || request.headers['content-type'] !== 'application/json') {
@@ -453,7 +467,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     modelCalls += 1
 
     const controller = new AbortController()
-    // A browser can stop waiting after consent. This cannot retract bytes already
+    // A browser can stop waiting after sending. This cannot retract bytes already
     // sent upstream, but it should stop an unfinished provider request if possible.
     const onClientClose = () => {
       if (!response.writableEnded) controller.abort()
