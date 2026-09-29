@@ -6,9 +6,13 @@ import {
 } from '../shared/aheScenario.js'
 
 const API_PATH = '/api/ai/synthetic-question'
+const PRIVATE_API_PATH = '/api/ai/private-question'
 const MAX_BODY_BYTES = 256
+const MAX_PRIVATE_BODY_BYTES = 4_096
+const MAX_PRIVATE_QUOTE_CHARS = 1_000
 const MAX_MODEL_OUTPUT_CHARS = 8192
 const SAFE_MESSAGE = '合成提问暂时不可用，请使用规则问题。'
+const PRIVATE_SAFE_MESSAGE = '千问提问暂时不可用，请继续使用本地问题。'
 // Model Studio's documented error codes; never relay an arbitrary provider string.
 const ALIBABA_ERROR_CODES = new Set([
   'AccessDenied', 'access_denied', 'AccessDenied.Unpurchased',
@@ -28,6 +32,18 @@ export interface ModelProvider {
   }): Promise<string>
 }
 
+export interface PrivateQuestionEntry {
+  id: string
+  revision: number
+  quote: string
+}
+
+export interface PrivateQuestionProvider {
+  provider: 'qwen'
+  id: string
+  generate(input: { entry: PrivateQuestionEntry; signal: AbortSignal }): Promise<string>
+}
+
 /** Carries only an upstream HTTP status and an allowlisted provider code. */
 export class ModelUpstreamHttpError extends Error {
   readonly upstreamCode?: string
@@ -42,6 +58,9 @@ export class ModelUpstreamHttpError extends Error {
 
 export interface SyntheticQuestionServerOptions {
   provider?: ModelProvider
+  /** A private provider alone cannot enable transmission of personal text. */
+  privateProvider?: PrivateQuestionProvider
+  privateAiEnabled?: boolean
   maxCalls?: number
   maxPerMinute?: number
   timeoutMs?: number
@@ -60,27 +79,29 @@ function writeJson(response: ServerResponse, status: number, payload: object): v
   response.end(JSON.stringify(payload))
 }
 
-function writeError(response: ServerResponse, status: number, code: ErrorCode): void {
+function writeError(response: ServerResponse, status: number, code: ErrorCode, isPrivate = false): void {
   writeJson(response, status, {
     status: 'error', code,
     message: code === 'invalid_request' ? '请求格式无效。' :
-      code === 'rate_limited' ? '合成提问次数已达上限，请稍后再试。' : SAFE_MESSAGE,
+      code === 'rate_limited' ? (isPrivate ? '千问提问次数已达上限，请稍后再试。' :
+        '合成提问次数已达上限，请稍后再试。') :
+        (isPrivate ? PRIVATE_SAFE_MESSAGE : SAFE_MESSAGE),
   })
 }
 
-async function readBoundedBody(request: IncomingMessage): Promise<string | null> {
+async function readBoundedBody(request: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<string | null> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of request) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += bytes.length
-    if (size > MAX_BODY_BYTES) {
+    if (size > maxBytes) {
       chunks.length = 0
       continue
     }
     chunks.push(bytes)
   }
-  return size > MAX_BODY_BYTES ? null : Buffer.concat(chunks).toString('utf8')
+  return size > maxBytes ? null : Buffer.concat(chunks).toString('utf8')
 }
 
 function validRequest(body: string | null): boolean {
@@ -93,6 +114,27 @@ function validRequest(body: string | null): boolean {
   } catch {
     return false
   }
+}
+
+function parsePrivateRequest(body: string | null): PrivateQuestionEntry | null {
+  if (!body) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(body) } catch { return null }
+  // Require the canonical encoding the frontend sends. This also rejects duplicate JSON keys.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+    JSON.stringify(parsed) !== body) return null
+  const value = parsed as Record<string, unknown>
+  if (Object.keys(value).length !== 1 || !value.entry || typeof value.entry !== 'object' ||
+    Array.isArray(value.entry)) return null
+  const entry = value.entry as Record<string, unknown>
+  if (Object.keys(entry).length !== 3 || typeof entry.id !== 'string' ||
+    typeof entry.quote !== 'string' || typeof entry.revision !== 'number') return null
+  const chars = Array.from(entry.quote)
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(entry.id) ||
+    !Number.isSafeInteger(entry.revision) || entry.revision < 1 ||
+    chars.length < 6 || chars.length > MAX_PRIVATE_QUOTE_CHARS ||
+    entry.quote.trim() !== entry.quote || /\0/.test(entry.quote)) return null
+  return { id: entry.id, revision: entry.revision, quote: entry.quote }
 }
 
 function isLoopbackHost(host: string | undefined): boolean {
@@ -147,6 +189,36 @@ function validateModelOutput(raw: string): ValidQuestion | 'no_reliable_citation
   return { question, citations }
 }
 
+function validatePrivateModelOutput(
+  raw: string, entry: PrivateQuestionEntry,
+): ValidQuestion | 'no_reliable_citation' | null {
+  if (raw.length > MAX_MODEL_OUTPUT_CHARS) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const value = parsed as Record<string, unknown>
+  if (Object.keys(value).length === 1 && value.noReliableCitation === true) {
+    return 'no_reliable_citation'
+  }
+  if (Object.keys(value).length !== 2 || typeof value.question !== 'string' ||
+    !Array.isArray(value.citations)) return null
+  const question = value.question.trim()
+  const chars = Array.from(question)
+  if (question !== value.question || chars.length < 6 || chars.length > 80 ||
+    !/[？?]$/.test(question) || (question.match(/[？?]/g)?.length ?? 0) !== 1 ||
+    /[\r\n]|https?:|www\.|```|<\/?\w|执行命令|上传|发送给|提供密码|验证码|银行卡|身份证号|抑郁症|焦虑症|人格障碍|心理疾病|诊断|治疗|你一定|你就是|肯定是/i.test(question)) {
+    return null
+  }
+  if (value.citations.length === 0) return 'no_reliable_citation'
+  if (value.citations.length !== 1) return null
+  const citation: unknown = value.citations[0]
+  if (!citation || typeof citation !== 'object' || Array.isArray(citation)) return null
+  const source = citation as Record<string, unknown>
+  if (Object.keys(source).length !== 2 || source.id !== entry.id ||
+    source.quote !== entry.quote) return null
+  return { question, citations: [{ id: entry.id, quote: entry.quote }] }
+}
+
 const mimeTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
@@ -195,7 +267,7 @@ async function serveStatic(request: IncomingMessage, response: ServerResponse, d
   }
 }
 
-/** Runs a single restricted experiment and optionally serves the built frontend from the same origin. */
+/** Runs restricted local AI routes and optionally serves the built frontend from the same origin. */
 export function createSyntheticQuestionServer(options: SyntheticQuestionServerOptions = {}): Server {
   let modelCalls = 0
   const windowByAddress = new Map<string, { start: number; count: number }>()
@@ -204,30 +276,34 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
   const timeoutMs = options.timeoutMs ?? 25_000
 
   const server = createServer(async (request, response) => {
-    if (request.url !== API_PATH) {
+    const isPrivate = request.url === PRIVATE_API_PATH
+    if (request.url !== API_PATH && !isPrivate) {
       await serveStatic(request, response, options.distDir)
       return
     }
     if (!isLoopbackHost(request.headers.host) || !isLoopbackOrigin(request.headers.origin)) {
-      writeError(response, 400, 'invalid_request')
+      writeError(response, 400, 'invalid_request', isPrivate)
       return
     }
     if (request.method !== 'POST' || request.headers['content-type'] !== 'application/json') {
-      writeError(response, 400, 'invalid_request')
+      writeError(response, 400, 'invalid_request', isPrivate)
       return
     }
     let body: string | null
-    try { body = await readBoundedBody(request) } catch {
-      writeError(response, 400, 'invalid_request')
+    try { body = await readBoundedBody(request, isPrivate ? MAX_PRIVATE_BODY_BYTES : MAX_BODY_BYTES) } catch {
+      writeError(response, 400, 'invalid_request', isPrivate)
       return
     }
-    if (!validRequest(body)) {
-      writeError(response, 400, 'invalid_request')
+    const privateEntry = isPrivate ? parsePrivateRequest(body) : null
+    if (isPrivate ? !privateEntry : !validRequest(body)) {
+      writeError(response, 400, 'invalid_request', isPrivate)
       return
     }
-    const model = options.provider
+    const model = isPrivate
+      ? (options.privateAiEnabled === true ? options.privateProvider : undefined)
+      : options.provider
     if (!model) {
-      writeError(response, 503, 'model_not_configured')
+      writeError(response, 503, 'model_not_configured', isPrivate)
       return
     }
     const now = Date.now()
@@ -237,7 +313,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     const address = request.socket.remoteAddress ?? 'unknown'
     const window = windowByAddress.get(address) ?? { start: now, count: 0 }
     if (modelCalls >= maxCalls || window.count >= maxPerMinute) {
-      writeError(response, 429, 'rate_limited')
+      writeError(response, 429, 'rate_limited', isPrivate)
       return
     }
     window.count += 1
@@ -245,6 +321,12 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     modelCalls += 1
 
     const controller = new AbortController()
+    // A browser can stop waiting after consent. This cannot retract bytes already
+    // sent upstream, but it should stop an unfinished provider request if possible.
+    const onClientClose = () => {
+      if (!response.writableEnded) controller.abort()
+    }
+    response.once('close', onClientClose)
     let timedOut = false
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout = new Promise<never>((_, reject) => {
@@ -255,42 +337,56 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
       }, timeoutMs)
     })
     try {
-      const raw = await Promise.race([model.generate({
-        scenarioVersion: AHE_SCENARIO_VERSION,
-        snippets: AHE_SYNTHETIC_SNIPPETS,
-        confirmedContext: AHE_CONFIRMED_CONTEXT,
-        signal: controller.signal,
-      }), timeout])
+      const raw = await Promise.race([
+        isPrivate
+          ? options.privateProvider!.generate({ entry: privateEntry!, signal: controller.signal })
+          : options.provider!.generate({
+            scenarioVersion: AHE_SCENARIO_VERSION,
+            snippets: AHE_SYNTHETIC_SNIPPETS,
+            confirmedContext: AHE_CONFIRMED_CONTEXT,
+            signal: controller.signal,
+          }),
+        timeout,
+      ])
+      if (response.destroyed) return
       if (typeof raw !== 'string') {
-        writeError(response, 502, 'invalid_model_output')
+        writeError(response, 502, 'invalid_model_output', isPrivate)
         return
       }
-      const result = validateModelOutput(raw)
+      const result = isPrivate
+        ? validatePrivateModelOutput(raw, privateEntry!)
+        : validateModelOutput(raw)
       if (result === 'no_reliable_citation') {
-        writeError(response, 422, result)
+        writeError(response, 422, result, isPrivate)
         return
       }
       if (!result) {
-        writeError(response, 502, 'invalid_model_output')
+        writeError(response, 502, 'invalid_model_output', isPrivate)
         return
       }
-      writeJson(response, 200, {
+      writeJson(response, 200, isPrivate ? {
+        status: 'generated', question: result.question, citations: result.citations,
+        model: { provider: model.provider, id: model.id }, generatedAt: new Date().toISOString(),
+      } : {
         status: 'generated', scenario: 'ahe', scenarioVersion: AHE_SCENARIO_VERSION,
         question: result.question, citations: result.citations,
         model: { provider: model.provider, id: model.id }, generatedAt: new Date().toISOString(),
       })
     } catch (error) {
-      if (error instanceof ModelUpstreamHttpError && !timedOut) {
+      if (response.destroyed) return
+      if (error instanceof ModelUpstreamHttpError && !timedOut && !isPrivate) {
         writeJson(response, 503, {
           status: 'error', code: 'model_unavailable', message: SAFE_MESSAGE,
           upstreamStatus: error.upstreamStatus,
           ...(error.upstreamCode ? { upstreamCode: error.upstreamCode } : {}),
         })
       } else {
-        writeError(response, timedOut ? 504 : 503, timedOut ? 'model_timeout' : 'model_unavailable')
+        writeError(response, timedOut ? 504 : 503,
+          timedOut ? 'model_timeout' : 'model_unavailable', isPrivate)
       }
     } finally {
       if (timer) clearTimeout(timer)
+      response.off('close', onClientClose)
     }
   })
   server.requestTimeout = 10_000

@@ -62,3 +62,27 @@ it('keeps private-mode pages free of synthetic-person labels even with an observ
   expect(container).not.toHaveTextContent('阿禾')
   expect(container).not.toHaveTextContent('合成')
 })
+
+it('renders all current corrections as printable content in their original order', () => {
+  let journal = journalReducer(createJournalState('free'), {
+    type: 'answer', entry: {
+      id: 'source', day: 1, topicId: 'daily', text: '今天散步也读了书。',
+      occurredAt: '2026-09-28T20:00:00+08:00', recordedAt: '2026-09-28T20:00:00+08:00', source: '本次页面回答',
+    },
+  })
+  for (const [id, text] of [['o1', '第一条准确背景'], ['o2', '第二条准确背景']]) {
+    journal = journalReducer(journal, { type: 'addObservation', observation: {
+      id, day: 1, text: '待确认', entryIds: ['source'], status: 'tentative',
+    } })
+    journal = journalReducer(journal, { type: 'correctObservation', id, text })
+  }
+  const { container } = render(<AlbumPage mode="private" album={selectAlbum(journal, 1)!} journal={journal}
+    dateForDay={() => '第 1 天'} />)
+
+  expect(screen.getAllByRole('group', { name: '你的原话修正' })).toHaveLength(2)
+  expect(container.textContent!.indexOf('第一条准确背景')).toBeLessThan(container.textContent!.indexOf('第二条准确背景'))
+  expect(container.querySelectorAll('.story-observation')).toHaveLength(2)
+
+  journal = journalReducer(journal, { type: 'deleteEntry', id: 'source' })
+  expect(selectAlbum(journal, 1)).toBeNull()
+})

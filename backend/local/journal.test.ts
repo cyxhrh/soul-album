@@ -103,6 +103,164 @@ describe('local journal service', () => {
     expect(question.citations).toEqual([{ kind: 'entry', id: saved.entry!.id, revision: 1 }])
   })
 
+  it('atomically adopts a cloud proposal only for the current cited unanswered rule question', () => {
+    const { repository, service } = setup()
+    const saved = service.sendMessage(spaceId, sendRequest(650, 0, '傍晚经过河边，停了一会儿。'))
+    const question = service.displayQuestion(spaceId, {
+      clientOperationId: id(651), expectedSpaceRevision: 1, kind: 'reflection',
+      displayedAt: '2026-09-29T08:01:00+08:00',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    const request = {
+      clientOperationId: id(652), expectedSpaceRevision: 2,
+      questionId: question.id, expectedQuestionRevision: question.revision,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      entryQuote: '傍晚经过河边',
+      text: '在河边停下来的那一刻，你留意到了什么？',
+    }
+    const adopted = service.adoptCloudQuestion(spaceId, request)
+    expect(adopted).toMatchObject({
+      id: question.id, revision: 2, status: 'ready', provenance: 'cloud_model',
+      text: request.text, citations: question.citations,
+      approvedExcerpt: request.entryQuote,
+    })
+    expect(repository.read(spaceId).questions).toHaveLength(1)
+    expect(repository.read(spaceId).revision).toBe(3)
+    expect(service.adoptCloudQuestion(spaceId, request)).toEqual(adopted)
+    expect(() => service.adoptCloudQuestion(spaceId, { ...request, entryQuote: '经过河边，停了' }))
+      .toThrowError(/idempotency_conflict/)
+    expect(() => service.adoptCloudQuestion(spaceId, { ...request, clientOperationId: id(653), expectedSpaceRevision: 3, expectedQuestionRevision: 2 }))
+      .toThrowError(/revision_conflict/)
+
+    const correction = service.recordQuestionCorrection(spaceId, {
+      clientOperationId: id(654), expectedSpaceRevision: 3,
+      questionId: question.id, expectedQuestionRevision: adopted.revision,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      text: '那时我在等一位朋友，不是在独自散心。',
+      correctedAt: '2026-09-29T08:02:00+08:00',
+    })
+    expect(correction).toMatchObject({
+      text: '那时我在等一位朋友，不是在独自散心。',
+      status: 'user_corrected', provenance: 'user_correction',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    expect(repository.read(spaceId).questions[0]).toMatchObject({
+      id: question.id, text: '理解已更正', status: 'user_corrected', revision: 3,
+    })
+    expect(() => service.sendMessage(spaceId, {
+      ...sendRequest(655, 4, '我继续回答旧问题。'), visibleQuestionId: question.id,
+    })).toThrowError(/revision_conflict/)
+
+    service.editEntry(spaceId, {
+      clientOperationId: id(656), entryId: saved.entry!.id, expectedRevision: 1,
+      text: '更改后的原话。',
+    })
+    const afterEdit = repository.read(spaceId)
+    expect(afterEdit.observations).toEqual([])
+    expect(afterEdit.questions[0].text).toBe('引用已修订')
+    expect(afterEdit.questions[0].approvedExcerpt).toBeUndefined()
+    expect(JSON.stringify(afterEdit)).not.toContain(request.entryQuote)
+    expect(JSON.stringify(afterEdit)).not.toContain('那时我在等一位朋友')
+    expect(JSON.stringify(afterEdit)).not.toContain('在河边停下来的那一刻')
+  })
+
+  it('rejects late cloud responses after source, question, or space state changes', () => {
+    const { repository, service } = setup()
+    const saved = service.sendMessage(spaceId, sendRequest(660, 0, '今天走了很远。'))
+    const question = service.displayQuestion(spaceId, {
+      clientOperationId: id(661), expectedSpaceRevision: 1, kind: 'reflection',
+      displayedAt: '2026-09-29T08:01:00+08:00',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    const request = {
+      clientOperationId: id(662), expectedSpaceRevision: 2,
+      questionId: question.id, expectedQuestionRevision: question.revision,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      entryQuote: saved.entry!.text,
+      text: '走了很远以后，你最想记住哪个片段？',
+    }
+    expect(() => service.adoptCloudQuestion(spaceId, { ...request, entryCitation: { id: id(999), revision: 1 } }))
+      .toThrowError(/revision_conflict/)
+    expect(() => service.adoptCloudQuestion(spaceId, { ...request, entryQuote: '不存在的长片段' }))
+      .toThrowError(/revision_conflict/)
+    expect(() => service.adoptCloudQuestion(spaceId, { ...request, text: '\n不合适的问题' }))
+      .toThrowError(/invalid_input/)
+    expect(repository.read(spaceId).revision).toBe(2)
+
+    service.sendMessage(spaceId, {
+      ...sendRequest(663, 2, '继续记下一句。'), visibleQuestionId: question.id,
+    })
+    expect(() => service.adoptCloudQuestion(spaceId, request)).toThrowError(/revision_conflict/)
+    expect(repository.read(spaceId).questions[0].provenance).toBe('local_rule')
+  })
+
+  it('does not restore an edited source when a delayed cloud proposal arrives', () => {
+    const { repository, service } = setup()
+    const saved = service.sendMessage(spaceId, sendRequest(670, 0, '旧的私人记录。'))
+    const question = service.displayQuestion(spaceId, {
+      clientOperationId: id(671), expectedSpaceRevision: 1, kind: 'reflection',
+      displayedAt: '2026-09-29T08:01:00+08:00',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    service.editEntry(spaceId, {
+      clientOperationId: id(672), entryId: saved.entry!.id, expectedRevision: 1,
+      text: '重新表述的记录。',
+    })
+    expect(() => service.adoptCloudQuestion(spaceId, {
+      clientOperationId: id(673), expectedSpaceRevision: 2,
+      questionId: question.id, expectedQuestionRevision: 1,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      entryQuote: saved.entry!.text,
+      text: '关于旧的私人记录，你还想说什么？',
+    })).toThrowError(/revision_conflict/)
+    expect(JSON.stringify(repository.read(spaceId))).not.toContain('旧的私人记录')
+  })
+
+  it('files a later correction on its actual day and removes that page with its source', () => {
+    const { repository, service } = setup()
+    const saved = service.sendMessage(spaceId, sendRequest(680, 0, '第一天经过河边，记下了晚风。'))
+    const question = service.displayQuestion(spaceId, {
+      clientOperationId: id(681), expectedSpaceRevision: 1, kind: 'reflection',
+      displayedAt: '2026-09-29T08:01:00+08:00',
+      citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
+    })
+    const adopted = service.adoptCloudQuestion(spaceId, {
+      clientOperationId: id(682), expectedSpaceRevision: 2,
+      questionId: question.id, expectedQuestionRevision: 1,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      entryQuote: '第一天经过河边', text: '那天独自散步时，晚风让你想起什么？',
+    })
+    const correction = service.recordQuestionCorrection(spaceId, {
+      clientOperationId: id(683), expectedSpaceRevision: 3,
+      questionId: question.id, expectedQuestionRevision: adopted.revision,
+      entryCitation: { id: saved.entry!.id, revision: 1 },
+      text: '其实我是在等朋友。', correctedAt: '2026-09-30T09:00:00+08:00',
+    })
+    expect(correction).toMatchObject({
+      journalDate: '2026-09-30', recordedAt: '2026-09-29T09:00:00.000Z',
+    })
+    expect(service.listDays(spaceId).dates).toEqual(['2026-09-30', '2026-09-29'])
+    expect(service.getDay(spaceId, '2026-09-29')?.observations).toEqual([])
+    expect(service.getDay(spaceId, '2026-09-30')).toMatchObject({
+      entries: [], observations: [correction],
+    })
+    service.setDayTitle(spaceId, {
+      clientOperationId: id(684), date: '2026-09-30', text: '更正那天的记忆',
+      expectedRevision: 0, expectedSpaceRevision: 4,
+    })
+    expect(service.getDay(spaceId, '2026-09-30')?.title?.text).toBe('更正那天的记忆')
+
+    service.deleteEntry(spaceId, {
+      clientOperationId: id(685), entryId: saved.entry!.id, expectedRevision: 1,
+    })
+    expect(service.listDays(spaceId).dates).toEqual([])
+    expect(service.getDay(spaceId, '2026-09-30')).toBeNull()
+    const serialized = JSON.stringify(repository.read(spaceId))
+    expect(serialized).not.toContain('第一天经过河边')
+    expect(serialized).not.toContain('其实我是在等朋友')
+    expect(serialized).not.toContain('更正那天的记忆')
+  })
+
   it('redacts dependent questions and titles when an entry changes, then scrubs deletion', () => {
     const { repository, service } = setup()
     const first = service.sendMessage(spaceId, sendRequest(8, 0, '秘密旧句。'))

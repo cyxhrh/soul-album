@@ -65,6 +65,8 @@ export interface SourceFact {
 export interface QuestionRecord {
   day: number
   text: string
+  provenance?: 'local_rule' | 'on_device_model' | 'cloud_model'
+  approvedExcerpt?: string
   answerEntryId?: string
   citationEntryId?: string
   citationEntryRevision?: number

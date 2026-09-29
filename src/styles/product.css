@@ -65,6 +65,24 @@
 .product-bubble small, .product-bubble time { display: block; color: #71847a; font-size: 10px; line-height: 1.5; }
 .product-bubble time { margin-top: 5px; text-align: right; }
 .product-bubble-row.current .product-bubble { border-color: #bed4c4; }
+.product-question-action { display: block; margin-top: 9px; padding: 3px 0; border: 0; background: transparent; color: #376c53; cursor: pointer; text-align: left; font: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.product-question-evidence { margin-top: 8px; color: #516f5c; font-size: 11px; }
+.product-question-evidence summary { cursor: pointer; }
+.product-question-evidence blockquote { max-height: 180px; overflow-y: auto; margin: 6px 0 0; padding: 7px 9px; border-left: 2px solid #abcbb1; background: #f4f7ef; color: var(--ink); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.product-question-correction { margin-top: 7px; }
+.product-question-correction label { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 11px; }
+.product-question-correction textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 8px; border: 1px solid #bdcbbd; border-radius: 7px; background: #fffdf8; color: var(--ink); font: inherit; font-size: 12px; resize: vertical; }
+.product-question-correction > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.product-question-correction > div button { min-height: 33px; padding: 5px 8px; border: 1px solid #b6cbb9; border-radius: 5px; background: #fffdf8; color: var(--ink); cursor: pointer; font-size: 11px; }
+.product-question-correction > div button:disabled { opacity: .5; cursor: not-allowed; }
+.product-private-dialog { width: min(100%, 570px); }
+.product-private-dialog > p { line-height: 1.7; }
+.product-private-dialog label { display: block; margin: 15px 0 6px; font-size: 12px; font-weight: 600; }
+.product-private-dialog textarea { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #bccdbf; border-radius: 5px; background: #fffdf8; color: var(--ink); font: inherit; font-size: 13px; line-height: 1.6; resize: vertical; }
+.product-private-dialog details { margin: 11px 0; }
+.product-private-dialog summary { cursor: pointer; font-size: 11px; }
+.product-private-dialog pre { overflow-x: auto; padding: 10px; background: #eef2eb; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 10px; }
+.product-private-dialog .free-print-actions button:disabled { opacity: .5; cursor: not-allowed; }
 .product-rest { max-width: 410px; margin: 4px auto 0; padding: 14px 18px; border: 1px solid #d9e3d8; border-radius: 10px; background: #f2f6ef; text-align: center; }
 .product-rest strong { font-size: 12px; }
 .product-rest p { margin: 7px 0; color: var(--muted); font-size: 11px; line-height: 1.7; }
@@ -96,6 +114,9 @@
 .product-album-days { margin-bottom: 20px; }
 .product-album-page { width: min(100%, 760px); margin: 0 auto; }
 .product-record-tools, .product-comparison, .product-question-history { max-width: 760px; margin-left: auto; margin-right: auto; }
+.product-compare-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 17px; }
+.product-compare-picker label { display: grid; gap: 6px; color: var(--muted); font-size: 11px; }
+.product-compare-picker select { min-width: 0; width: 100%; min-height: 40px; padding: 7px 9px; border: 1px solid #b8caba; border-radius: 6px; background: #fffdf8; color: var(--ink); font: inherit; font-size: 12px; }
 .product-record-tools { margin-top: 37px; }
 .product-album-empty { max-width: 450px; margin: 60px auto; padding: 35px 25px; border: 1px dashed #b3c4b5; border-radius: 15px; background: #fcfbf6; text-align: center; }
 .product-album-empty span { color: var(--green); font-family: var(--display); font-size: 31px; }
@@ -125,6 +146,7 @@
   .product-composer-input textarea { min-height: 55px; }
   .product-album, .product-data { padding: 20px 15px 37px; }
   .product-album-intro { align-items: flex-start; }
+  .product-compare-picker { grid-template-columns: 1fr; }
   .product-album-intro .guided-print { flex: none; }
   .product-footer { display: none; }
 }

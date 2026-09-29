@@ -25,33 +25,31 @@ function SourcePhoto({ src, title }: { src: string; title: string }) {
 }
 
 export default function AlbumPage({ mode, album, journal, dateForDay, entryLabels, derivedObservation, onCorrect }: AlbumPageProps) {
-  const [evidenceOpen, setEvidenceOpen] = useState(false)
-  const observation = album.observation
-  const evidence = observation?.entryIds.flatMap((id) => {
-    const entry = journal.entries.find((item) => item.id === id)
-    return entry ? [entry] : []
-  }) ?? []
-  const pastCount = evidence.filter((entry) => entry.day !== album.day).length
+  const [evidenceOpenId, setEvidenceOpenId] = useState<string | null>(null)
 
   return (
     <article className="story-album-page print-page" aria-label={`${dateForDay(album.day)}画册页`}>
       <div className="story-page-spine" aria-hidden="true" />
       <header className="story-page-header">
-        <p className="story-page-overline">SOUL ALBUM <span>·</span> {mode === 'private' ? '规则模式' : '合成演示'}</p>
+        <p className="story-page-overline">SOUL ALBUM <span>·</span> {mode === 'private' ? '本次页面记录' : '合成演示'}</p>
         <div className="story-page-date-row">
           <div>
             <p className="story-page-date">{dateForDay(album.day)}</p>
-            {mode === 'private' && <p className="story-page-overline">演示日期：{album.entries[0]?.occurredAt.slice(0, 10)}</p>}
-            <h2>{album.titleRevision > 0 ? album.title : mode === 'private' ? '今天留下的原话' : '那天记下的事'}</h2>
+            {mode === 'private' && album.entries.length > 0 &&
+              <p className="story-page-overline">演示日期：{album.entries[0].occurredAt.slice(0, 10)}</p>}
+            <h2>{album.titleRevision > 0 ? album.title : mode === 'private'
+              ? album.entries.length > 0 ? '今天留下的原话' : '今天补充的准确背景'
+              : '那天记下的事'}</h2>
           </div>
-          <span className="story-page-private">仅自己可见<br />{mode === 'private' ? '只保留在本次页面' : '合成资料'}</span>
+          <span className="story-page-private">{mode === 'private' ? '本次页面记录' : '合成资料'}</span>
         </div>
+        {mode === 'private' && <p className="story-page-revision">若曾单次授权发送片段，百炼可能留存该片段。</p>}
         {album.titleRevision > 0 && <p className="story-page-revision">标题修订第 {album.titleRevision} 版</p>}
       </header>
 
       <div className="story-page-content">
-        <p className="story-page-section-label">今天的生活 · 来自原话</p>
-        <div className="story-entry-list">
+        {album.entries.length > 0 && <><p className="story-page-section-label">今天的生活 · 来自原话</p>
+          <div className="story-entry-list">
           {album.entries.map((entry) => (
             <section className="story-entry" key={entry.id}>
               <p className="story-entry-kind">{(entryLabels?.[entry.id] ?? ['记录片段']).map((label) => <span key={label}>{label}</span>)}</p>
@@ -62,7 +60,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
               </p>
             </section>
           ))}
-        </div>
+          </div></>}
 
         {album.sources.length > 0 && (
           <section className="story-sources" aria-label="已授权补充资料">
@@ -82,8 +80,14 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
           </section>
         )}
 
-        {observation && (
-          <section className="story-observation" aria-label="观察与修正">
+        {album.observations.map((observation) => {
+          const evidence = observation.entryIds.flatMap((id) => {
+            const entry = journal.entries.find((item) => item.id === id)
+            return entry ? [entry] : []
+          })
+          const pastCount = evidence.filter((entry) => entry.day !== album.day).length
+          const evidenceOpen = evidenceOpenId === observation.id
+          return <section className="story-observation" aria-label="观察与修正" key={observation.id}>
             <div className="story-observation-heading">
               <span>{observation.status === 'corrected' ? '理解已修正' : 'Agent 暂定解释 · 可纠正'}</span>
               {observation.status === 'corrected' && <span>修正第 {observation.revision} 版</span>}
@@ -95,7 +99,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
                   <p>“{observation.text}”</p>
                   <small>来源：{mode === 'private' ? '本次页面修正' : '合成剧情中的阿禾修正'}</small>
                 </div>
-                {derivedObservation && (
+                {derivedObservation && observation.id === album.observation?.id && (
                   <div className="story-agent-reading" role="group" aria-label="Agent 新的暂定观察">
                     <strong>Agent 新的暂定观察</strong>
                     <p>{derivedObservation}</p>
@@ -104,7 +108,9 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
               </>
             ) : <p className="story-observation-text">{observation.text}</p>}
             <p className="story-observation-basis">{mode === 'private'
-              ? `依据：本页原话与 ${pastCount} 条此前回答。`
+              ? album.entries.length > 0
+                ? `依据：本页原话与 ${pastCount} 条此前回答。`
+                : `依据：${pastCount} 条此前回答，以及你今天的纠正。`
               : `依据：本页原话与 ${pastCount} 条合成历史回答；均为阿禾自述。`}</p>
             <p className="story-observation-uncertain">
               仍不确定：{mode === 'private'
@@ -114,7 +120,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
                   : '时间先后不能证明原因，这些自述不足以判断聚会是否造成疲惫。'}
             </p>
             <div className="story-observation-actions screen-only">
-              <button type="button" onClick={() => setEvidenceOpen((open) => !open)}>
+              <button type="button" onClick={() => setEvidenceOpenId(evidenceOpen ? null : observation.id)}>
                 {evidenceOpen ? '收起观察依据' : '查看观察依据'}
               </button>
               {observation.status !== 'corrected' && onCorrect &&
@@ -135,10 +141,12 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
               </div>
             )}
           </section>
-        )}
+        })}
       </div>
       <footer className="story-page-footer">
-        <span>此页由当前有效回答整理 · {mode === 'private' ? '规则模式' : '合成演示'}</span>
+        <span>{mode === 'private' && album.entries.length === 0
+          ? '此页由你的纠正与有效原话整理 · 本次页面记录'
+          : `此页由当前有效回答整理 · ${mode === 'private' ? '本次页面记录' : '合成演示'}`}</span>
         <span>{mode === 'private' ? `第 ${album.day} 天` : `${String(album.day).padStart(2, '0')} / 09`}</span>
       </footer>
     </article>

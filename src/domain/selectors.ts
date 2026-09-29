@@ -18,6 +18,8 @@ export interface AlbumView {
   titleRevision: number
   entries: AlbumEntry[]
   sources: (SourceFact & { consentUpdatedAt: string })[]
+  observations: Observation[]
+  /** Compatibility for the guided story, which presents one current observation. */
   observation: Observation | null
 }
 
@@ -30,7 +32,7 @@ export interface ComparisonView {
 }
 
 export interface QuestionView extends QuestionRecord {
-  mode: 'rule'
+  mode: 'rule' | 'cloud'
   status: 'ready' | 'reference-revised' | 'reference-deleted'
 }
 
@@ -42,11 +44,14 @@ function viewEntry(entry: JournalState['entries'][number]): AlbumEntry {
 /** This view is also the source for current-day printing; it contains no old revisions. */
 export function selectAlbum(state: JournalState, day: number): AlbumView | null {
   const entries = state.entries.filter((entry) => entry.day === day)
-  if (entries.length === 0) return null
-  const observation = [...state.observations].reverse().find((item) =>
+  const validObservations = state.observations.filter((item) =>
     item.day === day && item.entryIds.length > 0 &&
     item.entryIds.every((id) => state.entries.some((entry) => entry.id === id)),
-  ) ?? null
+  )
+  const observation = validObservations.at(-1) ?? null
+  const observations = validObservations.filter((item) =>
+    item.status === 'corrected' || item.id === observation?.id)
+  if (entries.length === 0 && !observation) return null
   return {
     spaceId: state.spaceId,
     day,
@@ -55,6 +60,7 @@ export function selectAlbum(state: JournalState, day: number): AlbumView | null 
     entries: entries.map(viewEntry),
     sources: state.sourceFacts.filter((fact) => fact.day === day && state.sourceConsents[fact.sourceId]?.granted)
       .map((fact) => ({ ...fact, consentUpdatedAt: state.sourceConsents[fact.sourceId].updatedAt })),
+    observations,
     observation,
   }
 }
@@ -85,7 +91,7 @@ function questionView(state: JournalState, question: QuestionRecord): QuestionVi
     if (!observation) status = 'reference-revised'
     else if (observation.revision !== question.citationObservationRevision) status = 'reference-revised'
   }
-  return { ...question, mode: 'rule', status }
+  return { ...question, mode: question.provenance === 'cloud_model' ? 'cloud' : 'rule', status }
 }
 
 /** Always returns the next rule prompt from current facts, including earlier answers today. */
