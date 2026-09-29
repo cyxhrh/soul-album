@@ -10,8 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-backend
+dist-server
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
 test-results
 playwright-report
 .playwright-cli/
