@@ -162,6 +162,18 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const questionCount = cadence === 'weekly' ? 1 : 2
   const activeQuestion = snapshot.questions.find((question) => question.id === activeQuestionId)
   const visibleQuestionText = activeQuestion?.text ?? ''
+  function entrySourcePreview(entryId: string | undefined, revision: number | undefined): string | null {
+    if (!entryId || revision === undefined) return null
+    const source = snapshot.entries.find((entry) => entry.id === entryId && entry.revision === revision)
+    if (!source) return null
+    const characters = Array.from(source.text.replace(/\s+/g, ' ').trim())
+    if (characters.length === 0) return null
+    const preview = characters.slice(0, 28).join('') + (characters.length > 28 ? '…' : '')
+    return `关联第 ${session.dayForDate(source.journalDate)} 天 · 「${preview}」`
+  }
+  const activeCitation = activeQuestion?.status === 'ready'
+    ? activeQuestion.citations.find((citation) => citation.kind === 'entry') : undefined
+  const activeSourcePreview = entrySourcePreview(activeCitation?.id, activeCitation?.revision)
   const recordedDays = [...new Set(journal.entries.map((entry) => entry.day))]
     .sort((first, second) => first - second)
   const albumDay = recordedDays.includes(viewedDay) ? viewedDay : recordedDays.at(-1) ?? day
@@ -477,13 +489,16 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   </div>
                   const entry = item.entry
                   const answered = todayQuestions.find((questionRecord) => questionRecord.answerEntryId === entry.id)
+                  const answeredSourcePreview = answered?.status === 'ready'
+                    ? entrySourcePreview(answered.citationEntryId, answered.citationEntryRevision) : null
                   const isProactive = entry.topicId.startsWith('proactive-day-')
                   return <div className="product-exchange" key={entry.id}>
                     {answered && !isProactive && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><small>心灵画册 · 当时的问题</small>
                         <p>{answered.status === 'ready' ? answered.text :
-                          answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p></div>
+                          answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
+                        {answeredSourcePreview && <small className="product-question-source">{answeredSourcePreview}</small>}</div>
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble">
                       <p>{entry.text}</p>
@@ -494,7 +509,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 {(due || extraQuestion) && <div className="product-bubble-row agent current">
                   <span className="product-avatar" aria-hidden="true">画</span>
                   <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'}</small>
-                    <p>{visibleQuestionText}</p></div>
+                    <p>{visibleQuestionText}</p>
+                    {activeSourcePreview && <small className="product-question-source">{activeSourcePreview}</small>}</div>
                 </div>}
                 {!due && !extraQuestion && <div className="product-rest" role="note">
                   <strong>{roundClosed ? '今天的邀请已结束' : '第 ' + day + ' 天不邀请'}</strong>
@@ -582,9 +598,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               <button type="button" onClick={() => setActiveTab('chat')}>去对话</button>
             </div>}
             {album && <section className="free-comparison guided-comparison product-comparison screen-only"
-              role="region" aria-label="两日对照">
+              role="region" aria-label="前后两页摘录">
               <div className="guided-comparison-heading"><span className="guided-section-index">与过去相比</span>
-                <h2>两日对照</h2><p>同一主题只并列原话；规则模式不判断变化原因。</p></div>
+                <h2>前后两页摘录</h2><p>如已有两页问答记录，各取一条原话并列；规则模式不判断话题是否相关或变化原因。</p></div>
               {comparison ? <div className="guided-comparison-pages">
                 {comparison.entries.map((entry) => <div key={entry.id}>
                   <span>第 {entry.day} 天</span><blockquote>“{entry.text}”</blockquote><small>来源：{entry.source}</small>

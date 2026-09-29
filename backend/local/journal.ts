@@ -1,3 +1,4 @@
+import { localQuestionText, type LocalQuestionKind } from '../../shared/localQuestionCopy.js'
 import { classifyChatIntent } from '../../src/domain/chatIntent.js'
 import { journalDate } from './date.js'
 import { LocalDomainError } from './errors.js'
@@ -233,7 +234,6 @@ export class LocalJournalService {
           throw new LocalDomainError('revision_conflict')
         }
       }
-      const citedTexts: string[] = []
       for (const citation of request.citations) {
         if (!['entry', 'observation'].includes(citation.kind)) throw new LocalDomainError('invalid_input')
         const source = citation.kind === 'entry'
@@ -243,15 +243,15 @@ export class LocalJournalService {
         if (citation.kind === 'observation' && 'status' in source && source.status !== 'user_corrected') {
           throw new LocalDomainError('invalid_input')
         }
-        citedTexts.push(source.text.slice(0, 80))
       }
-      const text = request.kind === 'open' ? '今天有什么想记下的？'
-        : request.kind === 'moment' ? '今天有没有一个小瞬间想留在画册里？'
-          : request.citations.length === 1 && request.citations[0].kind === 'entry'
-            ? `你之前说“${citedTexts[0]}”。今天有什么想记下的？`
-            : request.citations.length === 1 && request.citations[0].kind === 'observation'
-              ? `你补充说“${citedTexts[0]}”。今天还有什么想记下的？`
-              : `你之前提到${citedTexts.map((item) => `“${item}”`).join('、')}。今天有什么不同？`
+      const questionKind: LocalQuestionKind = request.kind === 'open' || request.kind === 'moment'
+        ? request.kind
+        : request.citations.length === 1 && request.citations[0].kind === 'entry'
+          ? 'entry'
+          : request.citations.length === 1 && request.citations[0].kind === 'observation'
+            ? 'observation'
+            : 'multiple'
+      const text = localQuestionText(questionKind, draft.questions.map((question) => question.text))
       const question: Question = {
         id: this.newId(), revision: 1, text,
         provenance: 'local_rule', status: 'ready', displayedAt: request.displayedAt,

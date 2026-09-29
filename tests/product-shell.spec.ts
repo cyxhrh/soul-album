@@ -154,7 +154,9 @@ test('album comparison follows its selected day and never previews later days', 
     await page.getByRole('button', { name: '发送', exact: true }).click()
   }
   await page.getByRole('button', { name: '画册' }).click()
-  const comparison = page.getByRole('region', { name: '两日对照' })
+  const comparison = page.getByRole('region', { name: '前后两页摘录' })
+  await expect(comparison).toContainText('如已有两页问答记录')
+  await expect(comparison).toContainText('规则模式不判断话题是否相关或变化原因')
   await expect(comparison).toContainText('第二天读书。')
   await expect(comparison).toContainText('第八天画画。')
   await page.getByRole('button', { name: '查看第 1 天' }).click()
@@ -164,6 +166,30 @@ test('album comparison follows its selected day and never previews later days', 
   await expect(comparison).toContainText('第一天散步。')
   await expect(comparison).toContainText('第二天读书。')
   await expect(comparison).not.toContainText('第八天画画。')
+})
+
+test('private excerpts label unrelated answer pairs and simulated times without claiming a shared topic', async ({ page }) => {
+  await page.goto('/')
+  const message = page.getByRole('textbox', { name: '发送消息' })
+  const send = page.getByRole('button', { name: '发送', exact: true })
+  await message.fill('今天去了河边。')
+  await send.click()
+  await message.fill('那时风吹得很舒服。')
+  await send.click()
+  await page.getByText('邀请节奏与演示日期').click()
+  await page.getByRole('button', { name: '推进到第 2 天' }).click()
+  await message.fill('今天又走到河边。')
+  await send.click()
+  await page.getByRole('button', { name: '画册' }).click()
+  const excerpts = page.getByRole('region', { name: '前后两页摘录' })
+  await expect(excerpts).toContainText('那时风吹得很舒服。')
+  await expect(excerpts).toContainText('今天又走到河边。')
+  await expect(excerpts).toContainText('不判断话题是否相关或变化原因')
+  await expect(excerpts).not.toContainText('同一主题')
+  const album = page.getByRole('article', { name: '第 2 天画册页' })
+  await expect(album).toContainText('演示日期时间')
+  await expect(album).toContainText('本次录入时间')
+  await expect(album).not.toContainText('演示发生')
 })
 
 test('one message composer handles brief control phrases without putting them in the album', async ({ page }) => {
@@ -236,7 +262,7 @@ test('an unrelated note does not rewrite the question already shown in the conve
   await expect(page.getByRole('region', { name: '已回答问题' })).toContainText('今天有什么想记下的？')
 })
 
-test('editing a quoted record withdraws its old wording from a skipped-question bubble', async ({ page }) => {
+test('editing a cited record keeps its old wording out of a skipped-question bubble', async ({ page }) => {
   const old = '仅自己知道的旧词。'
   await page.goto('/')
   const message = page.getByRole('textbox', { name: '发送消息' })
@@ -247,7 +273,7 @@ test('editing a quoted record withdraws its old wording from a skipped-question 
   await page.getByRole('button', { name: '推进到第 2 天' }).click()
   await message.fill('跳过这一题')
   await send.click()
-  await expect(page.getByRole('region', { name: '对话记录' })).toContainText(old)
+  await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(old)
   await page.getByRole('button', { name: '画册' }).click()
   await page.getByRole('button', { name: '查看第 1 天' }).click()
   await page.getByRole('button', { name: '修改这条原话' }).click()

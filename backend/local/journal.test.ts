@@ -90,15 +90,17 @@ describe('local journal service', () => {
     expect(service.getDay(spaceId, '2026-09-28')).toBeNull()
   })
 
-  it('asks an entry-based reflection in the established gentle wording', () => {
+  it('asks a gentle follow-up without echoing a punctuated entry', () => {
     const { service } = setup()
-    const saved = service.sendMessage(spaceId, sendRequest(97, 0, '窗台上的蓝杯子'))
+    const saved = service.sendMessage(spaceId, sendRequest(97, 0, '今天去了河边，看到夕阳，很开心。'))
     const question = service.displayQuestion(spaceId, {
       clientOperationId: id(98), expectedSpaceRevision: 1,
       kind: 'reflection', displayedAt: '2026-09-29T08:01:00+08:00',
       citations: [{ kind: 'entry', id: saved.entry!.id, revision: 1 }],
     })
-    expect(question.text).toBe('你之前说“窗台上的蓝杯子”。今天有什么想记下的？')
+    expect(question.text).toBe('关于这段记录，还有什么想补充的吗？')
+    expect(question.text).not.toContain(saved.entry!.text)
+    expect(question.citations).toEqual([{ kind: 'entry', id: saved.entry!.id, revision: 1 }])
   })
 
   it('redacts dependent questions and titles when an entry changes, then scrubs deletion', () => {
@@ -111,7 +113,8 @@ describe('local journal service', () => {
       displayedAt: '2026-09-29T08:05:00+08:00',
       citations: [{ kind: 'entry', id: entry.id, revision: entry.revision }],
     })
-    expect(question.text).toContain('秘密旧句')
+    expect(question.text).toBe('关于这段记录，还有什么想补充的吗？')
+    expect(question.citations).toEqual([{ kind: 'entry', id: entry.id, revision: entry.revision }])
     service.setDayTitle(spaceId, {
       clientOperationId: id(10), date: '2026-09-29', text: '秘密旧句。',
       expectedRevision: 0, expectedSpaceRevision: 2,

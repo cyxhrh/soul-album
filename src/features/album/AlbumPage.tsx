@@ -57,7 +57,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
               <p className="story-entry-kind">{(entryLabels?.[entry.id] ?? ['记录片段']).map((label) => <span key={label}>{label}</span>)}</p>
               <blockquote>“{entry.text}”</blockquote>
               <p className="story-entry-source">
-                来源：{entry.source} · {mode === 'private' ? '演示发生' : '发生'} {dateTime(entry.occurredAt)} · 记录 {dateTime(entry.recordedAt)}
+                来源：{entry.source} · {mode === 'private' ? '演示日期时间' : '发生'} {dateTime(entry.occurredAt)} · {mode === 'private' ? '本次录入时间' : '记录'} {dateTime(entry.recordedAt)}
                 {entry.revision > 1 && ` · 原话修订第 ${entry.revision} 版`}
               </p>
             </section>

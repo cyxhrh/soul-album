@@ -1,3 +1,5 @@
+import { localQuestionText } from '../../shared/localQuestionCopy.js'
+
 /** The only mutable facts in a demo space live in JournalState. No browser storage is used. */
 export interface EntryRevision {
   text: string
@@ -113,9 +115,14 @@ export function titleDaysAffectedByEntryChange(
 
 /** Shared rule used by the reducer for answered-question history and by live selectors. */
 export function currentRuleQuestion(state: JournalState, day: number, citationEntryId?: string): QuestionRecord {
+  const shownTexts = Object.entries(state.questions)
+    .filter(([questionDay]) => Number(questionDay) <= day)
+    .sort(([first], [second]) => Number(first) - Number(second))
+    .flatMap(([, questions]) => questions.map((question) => question.text))
   const selectedEntry = citationEntryId === undefined ? undefined :
     state.entries.find((entry) => entry.id === citationEntryId && entry.day <= day)
-  if (citationEntryId !== undefined) return selectedEntry ? citedEntryQuestion(selectedEntry, day) : neutralQuestion(day)
+  if (citationEntryId !== undefined) return selectedEntry
+    ? citedEntryQuestion(selectedEntry, day, shownTexts) : neutralQuestion(day, shownTexts)
 
   const correction = state.observations.reduce<Observation | undefined>((latest, observation) => {
     if (observation.day >= day || observation.status !== 'corrected' ||
@@ -126,7 +133,7 @@ export function currentRuleQuestion(state: JournalState, day: number, citationEn
   if (correction) {
     return {
       day,
-      text: `你补充说“${correction.text}”。今天还有什么想记下的？`,
+      text: localQuestionText('observation', shownTexts),
       citationObservationId: correction.id,
       citationObservationRevision: correction.revision,
       dependencyEntryIds: correction.entryIds,
@@ -138,19 +145,19 @@ export function currentRuleQuestion(state: JournalState, day: number, citationEn
     if (entry.day > day) return latest
     return !latest || entry.day > latest.day ? entry : latest
   }, undefined)
-  return previous ? citedEntryQuestion(previous, day) : neutralQuestion(day)
+  return previous ? citedEntryQuestion(previous, day, shownTexts) : neutralQuestion(day, shownTexts)
 }
 
-function citedEntryQuestion(entry: Entry, day: number): QuestionRecord {
+function citedEntryQuestion(entry: Entry, day: number, shownTexts: readonly string[]): QuestionRecord {
   return {
-    day, text: `你之前说“${entry.text}”。今天有什么想记下的？`,
+    day, text: localQuestionText('entry', shownTexts),
     citationEntryId: entry.id, citationEntryRevision: entry.revision,
     dependencyEntryIds: [entry.id], referenceDeleted: false,
   }
 }
 
-function neutralQuestion(day: number): QuestionRecord {
-  return { day, text: '今天有什么想记下的？', dependencyEntryIds: [], referenceDeleted: false }
+function neutralQuestion(day: number, shownTexts: readonly string[]): QuestionRecord {
+  return { day, text: localQuestionText('open', shownTexts), dependencyEntryIds: [], referenceDeleted: false }
 }
 
 export function journalReducer(state: JournalState, action: JournalAction): JournalState {

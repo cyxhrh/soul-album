@@ -4,7 +4,7 @@
 
 在线体验：[GitHub Pages 前端 Demo](https://cyxhrh.github.io/soul-album/)；队友可从[公开源码仓库](https://github.com/cyxhrh/soul-album)获取代码。
 
-这是可在手机和电脑浏览器中操作的**本地内存 Demo**。默认对话与画册共用 `backend/local/` 的记录领域服务，经浏览器适配层在当前页面内存中运行；默认提问仍由本地规则生成，手表步数、手机消费记录和应用时长仍是固定演示数据及模拟授权。独立的阿禾合成资料模型实验已有接口接线，但尚未用真实密钥完成一次调用；它不接收自由对话原话。没有真实设备连接、账号、跨设备同步、加密存储或长期保存。输入的原话、草稿和开关状态只在当前页面内存中，刷新、关闭或点“清除”后消失。请不要把它当作正式日记存储。
+这是可在手机和电脑浏览器中操作的**本地内存 Demo**。默认对话与画册共用 `backend/local/` 的记录领域服务，经浏览器适配层在当前页面内存中运行；默认提问仍由本地规则生成，手表步数、手机消费记录和应用时长仍是固定演示数据及模拟授权。独立的阿禾合成资料模型实验已用 `qwen3.8-flash` 完成一次固定合成资料的真实试调用，返回 HTTP 200；它不接收自由对话原话，也尚未接入默认聊天。没有真实设备连接、账号、跨设备同步、加密存储或长期保存。输入的原话、草稿和开关状态只在当前页面内存中，刷新、关闭或点“清除”后消失。请不要把它当作正式日记存储。
 
 ## 运行
 
@@ -39,7 +39,7 @@ npm run dev:all
 
 若 `qwen-plus` 免费额度不可用，先在百炼控制台确认北京地域的 `qwen3.8-flash` 仍有足够免费额度；建议在额度未耗尽时开启该模型的“免费额度用完即停”。再运行 `powershell -NoProfile -File scripts/run-qwen-local.ps1 -Region cn -Model qwen3.8-flash -OneCall` 做合成资料试调用。`qwen3.8-flash` 是[官方模型 ID](https://help.aliyun.com/zh/model-studio/qwen3-8-flash)；各模型额度独立，切换模型不会自动发生。不要为已用尽额度的 `qwen-flash` 关闭“免费额度用完即停”来试用：关闭后因没有剩余额度，无法重新开启该保护。详见[百炼免费额度开关规则](https://help.aliyun.com/zh/model-studio/model-usage-statistics)。`-OneCall` 使该次启动最多发起一次上游模型调用尝试，失败也会用掉这次机会；重新启动会重置计数，且此开关不是费用上限。不要把密钥放进 `VITE_` 变量、前端文件、仓库或聊天消息。
 
-服务端只监听本机，端口默认为 `127.0.0.1:8787`；`npm run build:all` 后可用 `npm run start` 从同一服务提供静态页面和接口。现有 GitHub Pages 链接是静态规则版，不承载模型接口。若以后公开部署并配置付费密钥，须先另外设计访问控制和运营限额。真实调用成功前不能把测试响应写成 AI 佐证。
+服务端只监听本机，端口默认为 `127.0.0.1:8787`；`npm run build:all` 后可用 `npm run start` 从同一服务提供静态页面和接口。现有 GitHub Pages 链接是静态规则版，不承载模型接口。若以后公开部署并配置付费密钥，须先另外设计访问控制和运营限额。一次真实试调用的固定输入、模型设置与返回见[阿禾合成资料试调用记录](docs/evidence/2026-09-29-qwen38-flash-synthetic-trial.md)；这不证明自由聊天或长期提问质量。
 
 ## 体验路径
 
@@ -49,7 +49,7 @@ npm run dev:all
 
 这一版不声称理解开放式话语的深层意图。有待答问题时，普通消息暂按本轮回应保存；若想在问题中途明确另记一件事，可说“随手记：下班时看到了晚霞”。只有少量明确的完整句子由本地规则识别；后续才由后端模型推断用户是在回答、主动分享、换题或暂时不想聊，并允许用户纠正。切换三个页面会保留当前会话与未发送草稿。阿禾合成剧情、独立节奏场景与合成 AI 实验分别在 `?demo=story`、`?demo=rhythm`、`?demo=ai`，均与默认产品会话隔离。
 
-当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；其中设备内记录与日页协议已有浏览器内存实现，私人片段云分析及密文同步 HTTP 接口仍未实现。阿禾合成 AI 实验有[独立接口契约](docs/contracts/ai-experiment.md)与本地服务端实现，但尚无真实模型调用证据。
+当前界面见[交接截图](docs/handoff/evidence/README.md)，前端结构与行为边界见[接手说明](docs/handoff/frontend.md)。[项目架构](docs/architecture/README.md)、[领域词汇](CONTEXT.md)与 [API v1 协议](docs/contracts/api-v1.yaml)用于前后端协作；其中设备内记录与日页协议已有浏览器内存实现，私人片段云分析及密文同步 HTTP 接口仍未实现。阿禾合成 AI 实验有[独立接口契约](docs/contracts/ai-experiment.md)、本地服务端实现和[一次真实调用记录](docs/evidence/2026-09-29-qwen38-flash-synthetic-trial.md)；该记录尚缺不含密钥的原始请求／响应截图。
 
 前端优化可直接修改 `src/features/` 与 `src/styles/`，保留单一对话输入、从有效记录派生画册、逐来源展示模拟数据的行为边界。接入后端前应先核对 API v1 的授权与数据删除约束；当前模拟开关不能直接当作系统权限或云端授权。
 
@@ -64,4 +64,4 @@ npm run build:server
 npm run lint
 ```
 
-浏览器测试使用本机 Chromium；首次运行若缺少浏览器，可执行 `npx playwright install chromium`。接口接线完成不等于参赛作品全部完成；真实模型成功调用与佐证、视频、公开部署及正式提交仍在后续阶段。
+浏览器测试使用本机 Chromium；首次运行若缺少浏览器，可执行 `npx playwright install chromium`。一次固定合成资料的真实模型调用已完成；面向用户的模型接入、完整展示佐证、视频、公开部署及正式提交仍在后续阶段。
