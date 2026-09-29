@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import { createSyntheticQuestionServer } from './http.js'
 import { createQwenProviderFromEnv } from './qwen.js'
+import { maxCallsFromEnv } from './config.js'
 
 // This pilot is local-only; public paid-key deployment needs separate access control.
 const host = '127.0.0.1'
@@ -11,6 +12,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 
 const server = createSyntheticQuestionServer({
   provider: createQwenProviderFromEnv(),
+  maxCalls: maxCallsFromEnv(process.env.SOUL_ALBUM_AI_MAX_CALLS),
   distDir: resolve(process.cwd(), 'dist'),
 })
 server.listen(port, host, () => {

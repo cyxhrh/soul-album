@@ -1,7 +1,10 @@
 param(
   [ValidateSet('cn', 'intl', 'us')]
   [string]$Region = 'cn',
-  [string]$BaseUrl = ''
+  [string]$BaseUrl = '',
+  [ValidateSet('qwen-plus', 'qwen-flash')]
+  [string]$Model = 'qwen-plus',
+  [switch]$OneCall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +22,12 @@ $secretPointer = [IntPtr]::Zero
 try {
   if (-not (Test-Path -LiteralPath 'dist-server/server/index.js' -PathType Leaf)) {
     throw 'Run npm run build:server in a terminal without the API key first.'
+  }
+
+  Remove-Item Env:SOUL_ALBUM_AI_MAX_CALLS -ErrorAction SilentlyContinue
+  if ($OneCall) {
+    $env:SOUL_ALBUM_AI_MAX_CALLS = '1'
+    Write-Host 'One-call mode: this launch allows at most one upstream model attempt; an error also uses that attempt.'
   }
 
   Remove-Item Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue
@@ -43,7 +52,7 @@ try {
     }
   }
 
-  Write-Host "Region: $Region; model: qwen-plus. The key will not echo or be saved to a file."
+  Write-Host "Region: $Region; model: $Model. The key will not echo or be saved to a file."
   $secret = Read-Host 'Enter the NEW Model Studio API key' -AsSecureString
   $secretPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
   $plainKey = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($secretPointer)
@@ -52,12 +61,12 @@ try {
   $env:DASHSCOPE_API_KEY = $plainKey
   $plainKey = $null
   $env:SOUL_ALBUM_QWEN_BASE_URL = $selectedBaseUrl
-  $env:SOUL_ALBUM_QWEN_MODEL = 'qwen-plus'
+  $env:SOUL_ALBUM_QWEN_MODEL = $Model
   Write-Host 'This launcher holds the key in memory and passes it only to the local model server. Press Ctrl+C to stop it.'
   node dist-server/server/index.js
   if ($LASTEXITCODE -ne 0) { throw "Model server exited with code $LASTEXITCODE" }
 } finally {
-  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL,Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue
+  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL,Env:SOUL_ALBUM_QWEN_HTTPS_PROXY,Env:SOUL_ALBUM_AI_MAX_CALLS -ErrorAction SilentlyContinue
   if ($secretPointer -ne [IntPtr]::Zero) {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPointer)
   }

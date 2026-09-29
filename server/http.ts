@@ -9,6 +9,13 @@ const API_PATH = '/api/ai/synthetic-question'
 const MAX_BODY_BYTES = 256
 const MAX_MODEL_OUTPUT_CHARS = 8192
 const SAFE_MESSAGE = '合成提问暂时不可用，请使用规则问题。'
+// Model Studio's documented error codes; never relay an arbitrary provider string.
+const ALIBABA_ERROR_CODES = new Set([
+  'AccessDenied', 'access_denied', 'AccessDenied.Unpurchased',
+  'Model.AccessDenied', 'App.AccessDenied', 'Workspace.AccessDenied',
+  'Endpoint.AccessDenied', 'AllocationQuota.FreeTierOnly',
+  'Arrearage', 'InvalidApiKey', 'invalid_api_key',
+])
 
 export interface ModelProvider {
   provider: string
@@ -21,10 +28,15 @@ export interface ModelProvider {
   }): Promise<string>
 }
 
-/** Carries only an upstream HTTP status; never copy the provider error body. */
+/** Carries only an upstream HTTP status and an allowlisted provider code. */
 export class ModelUpstreamHttpError extends Error {
-  constructor(readonly upstreamStatus: number) {
+  readonly upstreamCode?: string
+
+  constructor(readonly upstreamStatus: number, upstreamCode?: unknown) {
     super('model unavailable')
+    if (typeof upstreamCode === 'string' && ALIBABA_ERROR_CODES.has(upstreamCode)) {
+      this.upstreamCode = upstreamCode
+    }
   }
 }
 
@@ -189,7 +201,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
   const windowByAddress = new Map<string, { start: number; count: number }>()
   const maxCalls = options.maxCalls ?? 30
   const maxPerMinute = options.maxPerMinute ?? 6
-  const timeoutMs = options.timeoutMs ?? 10_000
+  const timeoutMs = options.timeoutMs ?? 25_000
 
   const server = createServer(async (request, response) => {
     if (request.url !== API_PATH) {
@@ -272,6 +284,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
         writeJson(response, 503, {
           status: 'error', code: 'model_unavailable', message: SAFE_MESSAGE,
           upstreamStatus: error.upstreamStatus,
+          ...(error.upstreamCode ? { upstreamCode: error.upstreamCode } : {}),
         })
       } else {
         writeError(response, timedOut ? 504 : 503, timedOut ? 'model_timeout' : 'model_unavailable')

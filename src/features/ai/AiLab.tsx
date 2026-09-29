@@ -81,7 +81,7 @@ export default function AiLab() {
     controller.current = requestController
     setState({ kind: 'loading' })
 
-    const timeout = window.setTimeout(() => requestController.abort(), 20_000)
+    const timeout = window.setTimeout(() => requestController.abort(), 30_000)
     try {
       const response = await fetch('/api/ai/synthetic-question', {
         method: 'POST',

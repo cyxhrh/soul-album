@@ -180,6 +180,21 @@ describe('restricted synthetic model endpoint', () => {
     expect(calls).toBe(1)
   })
 
+  it('uses the only allowed attempt even when the provider rejects it', async () => {
+    let calls = 0
+    const model: ModelProvider = {
+      ...provider(), generate: async () => {
+        calls += 1
+        throw new ModelUpstreamHttpError(403, 'AllocationQuota.FreeTierOnly')
+      },
+    }
+    const { url } = await serve(model, { maxCalls: 1 })
+    expect((await post(url)).response.status).toBe(503)
+    const second = await post(url)
+    expect(second.response.status).toBe(429)
+    expect(calls).toBe(1)
+  })
+
   it('reports only the upstream HTTP status for local diagnosis', async () => {
     const model: ModelProvider = {
       ...provider(), generate: async () => { throw new ModelUpstreamHttpError(401) },
@@ -191,6 +206,23 @@ describe('restricted synthetic model endpoint', () => {
       status: 'error', code: 'model_unavailable',
       message: '合成提问暂时不可用，请使用规则问题。', upstreamStatus: 401,
     })
+  })
+
+  it('reports an allowlisted upstream code without provider details', async () => {
+    const model: ModelProvider = {
+      ...provider(), generate: async () => {
+        throw new ModelUpstreamHttpError(403, 'AccessDenied.Unpurchased')
+      },
+    }
+    const { url } = await serve(model)
+    const result = await post(url)
+    expect(result.response.status).toBe(503)
+    expect(result.data).toEqual({
+      status: 'error', code: 'model_unavailable',
+      message: '合成提问暂时不可用，请使用规则问题。',
+      upstreamStatus: 403, upstreamCode: 'AccessDenied.Unpurchased',
+    })
+    expect(new ModelUpstreamHttpError(403, 'PRIVATE_SENTINEL').upstreamCode).toBeUndefined()
   })
 
   it('serves the built UI and restricted API from one origin', async () => {

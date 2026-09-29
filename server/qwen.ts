@@ -1,10 +1,12 @@
 import { Agent, request as httpsRequest } from 'node:https'
+import type { IncomingMessage } from 'node:http'
 import { ModelUpstreamHttpError, type ModelProvider } from './http.js'
 
 const DEFAULT_MODEL = 'qwen-plus'
 const MAX_UPSTREAM_RESPONSE_CHARS = 64_000
 const MAX_UPSTREAM_RESPONSE_BYTES = MAX_UPSTREAM_RESPONSE_CHARS * 4
-const PROXY_REQUEST_TIMEOUT_MS = 10_000
+const MAX_UPSTREAM_ERROR_BYTES = 4_096
+const PROXY_REQUEST_TIMEOUT_MS = 24_000
 const DASH_SCOPE_HOSTS = new Set([
   'dashscope.aliyuncs.com',
   'dashscope-intl.aliyuncs.com',
@@ -50,6 +52,80 @@ function validatedProxyUrl(value: string | undefined): string | undefined {
   return proxy.href
 }
 
+function errorCodeFromJson(raw: string | undefined): unknown {
+  if (!raw) return undefined
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return undefined }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+  const error = parsed as { code?: unknown; error?: unknown }
+  if (error.code !== undefined) return error.code
+  if (!error.error || typeof error.error !== 'object' || Array.isArray(error.error)) return undefined
+  return (error.error as { code?: unknown }).code
+}
+
+async function readBoundedFetchErrorBody(response: Response): Promise<string | undefined> {
+  if (!response.body) return undefined
+  const reader = response.body.getReader()
+  const chunks: Buffer[] = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) return Buffer.concat(chunks).toString('utf8')
+      size += value.byteLength
+      if (size > MAX_UPSTREAM_ERROR_BYTES) {
+        await reader.cancel()
+        return undefined
+      }
+      chunks.push(Buffer.from(value))
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+type ProxyResponse = { ok: boolean; status: number; text(): Promise<string> }
+
+/** Reads the proxied HTTPS response with a smaller bound for provider errors. */
+export function readQwenProxyResponse(response: IncomingMessage): Promise<ProxyResponse> {
+  const status = response.statusCode ?? 502
+  const ok = status >= 200 && status < 300
+  const limit = ok ? MAX_UPSTREAM_RESPONSE_BYTES : MAX_UPSTREAM_ERROR_BYTES
+  return new Promise<ProxyResponse>((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    let ended = false
+    const emptyError = () => ({ ok: false, status, text: async () => '' })
+    response.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size > limit) {
+        if (ok) {
+          response.destroy(new Error('upstream response too large'))
+        } else {
+          response.destroy()
+          resolve(emptyError())
+        }
+        return
+      }
+      chunks.push(chunk)
+    })
+    response.on('end', () => {
+      ended = true
+      const raw = Buffer.concat(chunks).toString('utf8')
+      resolve({ ok, status, text: async () => raw })
+    })
+    response.on('error', (error) => {
+      if (ok) reject(error)
+      else resolve(emptyError())
+    })
+    response.on('close', () => {
+      if (ended) return
+      if (ok) reject(new Error('upstream response closed'))
+      else resolve(emptyError())
+    })
+  })
+}
+
 /** Node's HTTPS agent handles CONNECT and verifies the upstream TLS certificate. */
 function postThroughProxy(
   endpoint: string,
@@ -57,37 +133,15 @@ function postThroughProxy(
   body: string,
   signal: AbortSignal,
   proxyUrl: string,
-): Promise<{ ok: boolean; status: number; text(): Promise<string> }> {
+): Promise<ProxyResponse> {
   const agent = new Agent({ proxyEnv: { HTTPS_PROXY: proxyUrl } })
   const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(PROXY_REQUEST_TIMEOUT_MS)])
-  return new Promise<{ ok: boolean; status: number; text(): Promise<string> }>((resolve, reject) => {
+  return new Promise<ProxyResponse>((resolve, reject) => {
     const request = httpsRequest(endpoint, {
       method: 'POST',
       headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
       agent, signal: boundedSignal,
-    }, (response) => {
-      const status = response.statusCode ?? 502
-      if (status < 200 || status >= 300) {
-        response.destroy()
-        resolve({ ok: false, status, text: async () => '' })
-        return
-      }
-      const chunks: Buffer[] = []
-      let size = 0
-      response.on('data', (chunk: Buffer) => {
-        size += chunk.length
-        if (size > MAX_UPSTREAM_RESPONSE_BYTES) {
-          response.destroy(new Error('upstream response too large'))
-          return
-        }
-        chunks.push(chunk)
-      })
-      response.on('end', () => {
-        const text = Buffer.concat(chunks).toString('utf8')
-        resolve({ ok: true, status, text: async () => text })
-      })
-      response.on('error', reject)
-    })
+    }, (response) => { void readQwenProxyResponse(response).then(resolve, reject) })
     request.on('error', reject)
     request.end(body)
   }).finally(() => agent.destroy())
@@ -125,7 +179,7 @@ export function createQwenProviderFromEnv(
         },
         body: JSON.stringify({
           model: modelId, stream: false, temperature: 0.35, max_tokens: 256,
-          ...(modelId === DEFAULT_MODEL ? { enable_thinking: false } : {}),
+          ...(['qwen-plus', 'qwen-flash'].includes(modelId) ? { enable_thinking: false } : {}),
           response_format: { type: 'json_object' },
           messages: [{ role: 'system', content: system }, { role: 'user', content: data }],
         }),
@@ -133,7 +187,15 @@ export function createQwenProviderFromEnv(
       const response = proxyUrl && !fetcher
         ? await postThroughProxy(endpoint, requestInit.headers, requestInit.body, signal, proxyUrl)
         : await (fetcher ?? fetch)(endpoint, requestInit)
-      if (!response.ok) throw new ModelUpstreamHttpError(response.status)
+      if (!response.ok) {
+        let raw: string | undefined
+        try {
+          raw = 'body' in response
+            ? await readBoundedFetchErrorBody(response)
+            : await response.text()
+        } catch { /* A failed body read must not hide the HTTP status. */ }
+        throw new ModelUpstreamHttpError(response.status, errorCodeFromJson(raw))
+      }
       const raw = await response.text()
       if (raw.length > MAX_UPSTREAM_RESPONSE_CHARS) return ''
       let parsed: unknown

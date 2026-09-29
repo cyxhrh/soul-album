@@ -15,7 +15,7 @@ describe('Qwen OpenAI-compatible provider', () => {
     expect(createQwenProviderFromEnv({ DASHSCOPE_API_KEY: 'test-secret' })).toBeUndefined()
   })
 
-  it('sends only the fixed synthetic input with server-owned model configuration', async () => {
+  it.each(['qwen-plus', 'qwen-flash'])('sends only the fixed synthetic input with %s configuration', async (modelId) => {
     const requests: { url: string; init: RequestInit }[] = []
     const fetcher: typeof fetch = async (input, init) => {
       requests.push({ url: String(input), init: init ?? {} })
@@ -24,7 +24,7 @@ describe('Qwen OpenAI-compatible provider', () => {
       }), { status: 200 })
     }
     const model = createQwenProviderFromEnv({
-      DASHSCOPE_API_KEY: 'test-secret', SOUL_ALBUM_QWEN_MODEL: 'qwen-plus',
+      DASHSCOPE_API_KEY: 'test-secret', SOUL_ALBUM_QWEN_MODEL: modelId,
       SOUL_ALBUM_QWEN_BASE_URL: 'https://llm-test.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
     }, fetcher)
     expect(model).toBeDefined()
@@ -38,7 +38,7 @@ describe('Qwen OpenAI-compatible provider', () => {
     expect(requests[0].init.headers).toMatchObject({ Authorization: 'Bearer test-secret' })
     expect(requests[0].init.redirect).toBe('error')
     const body = JSON.parse(String(requests[0].init.body)) as Record<string, unknown>
-    expect(body.model).toBe('qwen-plus')
+    expect(body.model).toBe(modelId)
     expect(body.stream).toBe(false)
     expect(body.enable_thinking).toBe(false)
     expect(body.response_format).toEqual({ type: 'json_object' })
@@ -147,5 +147,50 @@ describe('Qwen OpenAI-compatible provider', () => {
     expect(error).toBeInstanceOf(ModelUpstreamHttpError)
     expect((error as ModelUpstreamHttpError).upstreamStatus).toBe(401)
     expect(String(error)).not.toMatch(/SECRET_KEY|PRIVATE_SENTINEL|test-secret/)
+  })
+
+  it('extracts only an allowlisted Alibaba error code from a provider error', async () => {
+    for (const payload of [
+      { code: 'Model.AccessDenied', message: 'PRIVATE_SENTINEL test-secret' },
+      { error: { code: 'AccessDenied', message: 'PRIVATE_SENTINEL test-secret' } },
+    ]) {
+      const fetcher: typeof fetch = async () => new Response(JSON.stringify({
+        ...payload, request_id: 'PRIVATE_REQUEST_ID', url: 'https://private.example',
+      }), { status: 403 })
+      const model = createQwenProviderFromEnv({
+        DASHSCOPE_API_KEY: 'test-secret',
+        SOUL_ALBUM_QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      }, fetcher)!
+      const error = await model.generate({
+        scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
+      }).catch((reason: unknown) => reason) as ModelUpstreamHttpError
+      expect(error).toBeInstanceOf(ModelUpstreamHttpError)
+      expect(error.upstreamStatus).toBe(403)
+      expect(error.upstreamCode).toBe('code' in payload ? payload.code : payload.error.code)
+      expect(JSON.stringify(error)).not.toMatch(/PRIVATE_SENTINEL|PRIVATE_REQUEST_ID|private\.example|test-secret/)
+      expect(String(error)).toBe('Error: model unavailable')
+    }
+  })
+
+  it('discards unknown, malformed and oversized error bodies', async () => {
+    for (const body of [
+      JSON.stringify({ code: 'PRIVATE_SENTINEL', message: 'private' }),
+      JSON.stringify({ code: 'Model.AccessDenied\nPRIVATE_SENTINEL' }),
+      JSON.stringify({ code: { value: 'Model.AccessDenied' } }),
+      '{"code":',
+      JSON.stringify({ code: 'Model.AccessDenied', padding: 'x'.repeat(5_000) }),
+    ]) {
+      const fetcher: typeof fetch = async () => new Response(body, { status: 403 })
+      const model = createQwenProviderFromEnv({
+        DASHSCOPE_API_KEY: 'test-secret',
+        SOUL_ALBUM_QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      }, fetcher)!
+      const error = await model.generate({
+        scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
+      }).catch((reason: unknown) => reason) as ModelUpstreamHttpError
+      expect(error.upstreamStatus).toBe(403)
+      expect(error.upstreamCode).toBeUndefined()
+      expect(JSON.stringify(error)).not.toContain('PRIVATE_SENTINEL')
+    }
   })
 })
