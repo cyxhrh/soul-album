@@ -9,18 +9,23 @@ function launch(args, env = process.env) {
   return spawn(node, args, { cwd: root, env, stdio: 'inherit' })
 }
 
-const compiler = launch(['node_modules/typescript/bin/tsc', '-p', 'tsconfig.server.json'])
+const frontendEnv = { ...process.env }
+delete frontendEnv.DASHSCOPE_API_KEY
+delete frontendEnv.SOUL_ALBUM_QWEN_BASE_URL
+delete frontendEnv.SOUL_ALBUM_QWEN_MODEL
+
+const compiler = launch(['node_modules/typescript/bin/tsc', '-p', 'tsconfig.server.json'], frontendEnv)
 const [buildCode] = await once(compiler, 'exit')
 if (buildCode !== 0) {
   process.exitCode = buildCode ?? 1
 } else {
   const server = launch(['dist-server/server/index.js'], {
-    ...process.env,
+    ...frontendEnv,
     SOUL_ALBUM_AI_PORT: process.env.SOUL_ALBUM_AI_PORT ?? '8787',
   })
   const vite = launch([
     'node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5175', '--strictPort',
-  ])
+  ], frontendEnv)
   let stopping = false
   function stop(code) {
     if (stopping) return

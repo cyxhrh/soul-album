@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ModelUpstreamHttpError } from './http.js'
 import { createQwenProviderFromEnv } from './qwen.js'
 
 const snippets = [{ id: 'ahe-today-return', quote: '返程过零点，今天起床才觉得累。' }]
@@ -91,5 +92,19 @@ describe('Qwen OpenAI-compatible provider', () => {
       scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
     })
     expect(result).toBe('')
+  })
+
+  it('keeps an upstream error body private while exposing its status to the local server', async () => {
+    const fetcher: typeof fetch = async () => new Response('SECRET_KEY PRIVATE_SENTINEL', { status: 401 })
+    const model = createQwenProviderFromEnv({
+      DASHSCOPE_API_KEY: 'test-secret',
+      SOUL_ALBUM_QWEN_BASE_URL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    }, fetcher)!
+    const error = await model.generate({
+      scenarioVersion: 'ahe-v1', snippets, confirmedContext: '', signal: new AbortController().signal,
+    }).catch((reason: unknown) => reason)
+    expect(error).toBeInstanceOf(ModelUpstreamHttpError)
+    expect((error as ModelUpstreamHttpError).upstreamStatus).toBe(401)
+    expect(String(error)).not.toMatch(/SECRET_KEY|PRIVATE_SENTINEL|test-secret/)
   })
 })

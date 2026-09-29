@@ -10,7 +10,7 @@
 { "scenario": "ahe" }
 ```
 
-服务端严格校验对象、字段和值：缺失、未知字段、数组、非字符串或除 `ahe` 外的值一律 `400 invalid_request`。不得接受 `prompt`、`answer`、`entries`、`userId`、自由文本、客户端指定模型或客户端给出的引文。服务端按 `scenario` 从固定、版本化的阿禾合成语料选择输入与来源 ID，构造 Prompt；客户端只发场景标识。服务端对请求频率和模型调用次数设限，并设置超时；不在 URL、访问日志、错误日志或埋点记录语料正文、Prompt、响应正文与密钥。
+服务端严格校验对象、字段和值：缺失、未知字段、数组、非字符串或除 `ahe` 外的值一律 `400 invalid_request`。当前本机实验还要求 `Host` 与可选的 `Origin` 指向本机回环地址，以拒绝外站浏览器请求。不得接受 `prompt`、`answer`、`entries`、`userId`、自由文本、客户端指定模型或客户端给出的引文。服务端按 `scenario` 从固定、版本化的阿禾合成语料选择输入与来源 ID，构造 Prompt；客户端只发场景标识。服务端对请求频率和模型调用次数设限，并设置超时；不在 URL、访问日志、错误日志或埋点记录语料正文、Prompt、响应正文与密钥。
 
 ## 成功响应
 
@@ -51,7 +51,7 @@
 | --- | --- | --- |
 | 400 | `invalid_request` | 请求不是严格的 `{ "scenario": "ahe" }`。 |
 | 429 | `rate_limited` | 本地实验限流或调用次数已达上限。 |
-| 503 | `model_not_configured`、`model_unavailable` | 服务端缺少模型配置或上游不可用。 |
+| 503 | `model_not_configured`、`model_unavailable` | 服务端缺少模型配置或上游不可用；上游返回 HTTP 错误时，本机实验响应可附纯数字 `upstreamStatus`，不会回传上游错误正文。 |
 | 504 | `model_timeout` | 上游超时；不自动重发。 |
 | 502 | `invalid_model_output` | 结构、长度、引用或内容校验未通过。 |
 | 422 | `no_reliable_citation` | 模型未给出引文，或自行报告无法可靠关联原话。 |

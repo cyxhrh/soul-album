@@ -21,6 +21,13 @@ export interface ModelProvider {
   }): Promise<string>
 }
 
+/** Carries only an upstream HTTP status; never copy the provider error body. */
+export class ModelUpstreamHttpError extends Error {
+  constructor(readonly upstreamStatus: number) {
+    super('model unavailable')
+  }
+}
+
 export interface SyntheticQuestionServerOptions {
   provider?: ModelProvider
   maxCalls?: number
@@ -71,6 +78,23 @@ function validRequest(body: string | null): boolean {
     const value: unknown = JSON.parse(body)
     return value !== null && typeof value === 'object' && !Array.isArray(value) &&
       Object.keys(value).length === 1 && 'scenario' in value && value.scenario === 'ahe'
+  } catch {
+    return false
+  }
+}
+
+function isLoopbackHost(host: string | undefined): boolean {
+  return typeof host === 'string' && /^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$/i.test(host)
+}
+
+function isLoopbackOrigin(origin: string | undefined): boolean {
+  if (origin === undefined) return true
+  try {
+    const parsed = new URL(origin)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') &&
+      !parsed.username && !parsed.password && parsed.pathname === '/' &&
+      !parsed.search && !parsed.hash
   } catch {
     return false
   }
@@ -172,6 +196,10 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
       await serveStatic(request, response, options.distDir)
       return
     }
+    if (!isLoopbackHost(request.headers.host) || !isLoopbackOrigin(request.headers.origin)) {
+      writeError(response, 400, 'invalid_request')
+      return
+    }
     if (request.method !== 'POST' || request.headers['content-type'] !== 'application/json') {
       writeError(response, 400, 'invalid_request')
       return
@@ -239,8 +267,15 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
         question: result.question, citations: result.citations,
         model: { provider: model.provider, id: model.id }, generatedAt: new Date().toISOString(),
       })
-    } catch {
-      writeError(response, timedOut ? 504 : 503, timedOut ? 'model_timeout' : 'model_unavailable')
+    } catch (error) {
+      if (error instanceof ModelUpstreamHttpError && !timedOut) {
+        writeJson(response, 503, {
+          status: 'error', code: 'model_unavailable', message: SAFE_MESSAGE,
+          upstreamStatus: error.upstreamStatus,
+        })
+      } else {
+        writeError(response, timedOut ? 504 : 503, timedOut ? 'model_timeout' : 'model_unavailable')
+      }
     } finally {
       if (timer) clearTimeout(timer)
     }

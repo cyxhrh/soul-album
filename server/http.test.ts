@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Server } from 'node:http'
+import { request as httpRequest, type Server } from 'node:http'
 import { resolve } from 'node:path'
-import { createSyntheticQuestionServer, type ModelProvider } from './http.js'
+import { createSyntheticQuestionServer, ModelUpstreamHttpError, type ModelProvider } from './http.js'
 
 const question = '返程过零点后，今天的作息有什么变化？'
 const quote = '返程过零点，今天起床才觉得累。'
@@ -26,9 +26,10 @@ async function serve(provider?: ModelProvider, options: {
   return { url, server }
 }
 
-async function post(url: string, body = '{"scenario":"ahe"}', contentType = 'application/json') {
+async function post(url: string, body = '{"scenario":"ahe"}', contentType = 'application/json',
+  extraHeaders: Record<string, string> = {}) {
   const response = await fetch(url, {
-    method: 'POST', headers: { 'content-type': contentType }, body,
+    method: 'POST', headers: { 'content-type': contentType, ...extraHeaders }, body,
   })
   return { response, data: await response.json() as Record<string, unknown> }
 }
@@ -143,6 +144,53 @@ describe('restricted synthetic model endpoint', () => {
     expect(result.response.status).toBe(503)
     expect(result.data.code).toBe('model_unavailable')
     expect(JSON.stringify(result.data)).not.toMatch(/SECRET_KEY|PRIVATE_SENTINEL|provider details/)
+  })
+
+  it('accepts the local UI but rejects foreign origins and rebinding hosts before a model call', async () => {
+    let calls = 0
+    const model: ModelProvider = {
+      ...provider(), generate: async () => { calls += 1; return validModelOutput },
+    }
+    const { url } = await serve(model)
+    const local = await post(url, '{"scenario":"ahe"}', 'application/json', {
+      Origin: 'http://127.0.0.1:5175',
+    })
+    expect(local.response.status).toBe(200)
+
+    const foreignOrigin = await post(url, '{"scenario":"ahe"}', 'application/json', {
+      Origin: 'https://untrusted.example',
+    })
+    expect(foreignOrigin.response.status).toBe(400)
+    expect(foreignOrigin.data.code).toBe('invalid_request')
+
+    const reboundHost = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = httpRequest(url, {
+        method: 'POST', headers: { Host: 'untrusted.example', 'Content-Type': 'application/json' },
+      }, (response) => {
+        let body = ''
+        response.setEncoding('utf8')
+        response.on('data', (chunk: string) => { body += chunk })
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, body }))
+      })
+      request.on('error', reject)
+      request.end('{"scenario":"ahe"}')
+    })
+    expect(reboundHost.status).toBe(400)
+    expect(JSON.parse(reboundHost.body)).toMatchObject({ code: 'invalid_request' })
+    expect(calls).toBe(1)
+  })
+
+  it('reports only the upstream HTTP status for local diagnosis', async () => {
+    const model: ModelProvider = {
+      ...provider(), generate: async () => { throw new ModelUpstreamHttpError(401) },
+    }
+    const { url } = await serve(model)
+    const result = await post(url)
+    expect(result.response.status).toBe(503)
+    expect(result.data).toEqual({
+      status: 'error', code: 'model_unavailable',
+      message: '合成提问暂时不可用，请使用规则问题。', upstreamStatus: 401,
+    })
   })
 
   it('serves the built UI and restricted API from one origin', async () => {

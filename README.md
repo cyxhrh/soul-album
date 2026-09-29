@@ -27,7 +27,7 @@ npm run demo:backend
 
 ## 合成资料模型实验
 
-无密钥也可检查完整的页面请求和失败回退：
+无密钥也可检查完整的页面请求和失败回退；`dev:all` 会明确剔除模型密钥，即使启动它的终端原本配置了密钥也只运行规则回退：
 
 ```bash
 npm run dev:all
@@ -35,7 +35,9 @@ npm run dev:all
 
 在 `http://127.0.0.1:5175/?demo=ai` 打开独立实验页，也可从阿禾剧情结尾进入。浏览器只向同源 `/api/ai/synthetic-question` 发送 `{ "scenario": "ahe" }`；服务端自行选择固定合成语料。无模型配置时接口返回 `503 model_not_configured`，页面显示明确的规则示例，不把它称为真实 AI 结果。`npm run test` 使用注入的假提供方验证合法生成、错误、超时、限流和逐字引文检查，不消耗模型额度；这些测试不能证明真实模型的提问质量。
 
-以后有可用百炼密钥时，应在**服务端运行环境**配置 `DASHSCOPE_API_KEY`、与该密钥地域及业务空间匹配的 `SOUL_ALBUM_QWEN_BASE_URL`，可选配置 `SOUL_ALBUM_QWEN_MODEL`，再启动服务。不要把密钥放进 `VITE_` 变量、前端文件、仓库或聊天消息。服务端只监听本机，端口默认为 `127.0.0.1:8787`；`npm run build:all` 后可用 `npm run start` 从同一服务提供静态页面和接口。现有 GitHub Pages 链接是静态规则版，不承载模型接口。若以后公开部署并配置付费密钥，须先另外设计访问控制和运营限额。真实调用成功前不能把测试响应写成 AI 佐证。
+有可用百炼密钥时，先在**没有密钥的终端**运行 `npm run build:server`，并另开一个不含密钥的终端运行 `npm run dev -- --host 127.0.0.1 --port 5175 --strictPort`。Windows 上再运行 `powershell -NoProfile -File scripts/run-qwen-local.ps1 -Region cn`：脚本会在本机终端不回显地读取北京地域的新密钥，启动器短暂在内存中持有它并只传给后端 Node 子进程，退出时清除该终端的环境变量。新加坡、美国可分别用 `intl`、`us`；非默认业务空间可用 `-BaseUrl` 指定百炼提供的专属兼容地址。不要把密钥放进 `VITE_` 变量、前端文件、仓库或聊天消息。
+
+服务端只监听本机，端口默认为 `127.0.0.1:8787`；`npm run build:all` 后可用 `npm run start` 从同一服务提供静态页面和接口。现有 GitHub Pages 链接是静态规则版，不承载模型接口。若以后公开部署并配置付费密钥，须先另外设计访问控制和运营限额。真实调用成功前不能把测试响应写成 AI 佐证。
 
 ## 体验路径
 

@@ -1,4 +1,4 @@
-import type { ModelProvider } from './http.js'
+import { ModelUpstreamHttpError, type ModelProvider } from './http.js'
 
 const DEFAULT_MODEL = 'qwen-plus'
 const MAX_UPSTREAM_RESPONSE_CHARS = 64_000
@@ -72,7 +72,7 @@ export function createQwenProviderFromEnv(
           messages: [{ role: 'system', content: system }, { role: 'user', content: data }],
         }),
       })
-      if (!response.ok) throw new Error('model unavailable')
+      if (!response.ok) throw new ModelUpstreamHttpError(response.status)
       const raw = await response.text()
       if (raw.length > MAX_UPSTREAM_RESPONSE_CHARS) return ''
       let parsed: unknown
