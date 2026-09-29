@@ -4,15 +4,19 @@ import { extname, relative, resolve, sep } from 'node:path'
 import {
   AHE_CONFIRMED_CONTEXT, AHE_SCENARIO_VERSION, AHE_SYNTHETIC_SNIPPETS,
 } from '../shared/aheScenario.js'
+import type { PrivateChatRequest, PrivateChatResponse, PrivateChatSource } from '../shared/privateChat.js'
 
 const API_PATH = '/api/ai/synthetic-question'
 const PRIVATE_API_PATH = '/api/ai/private-question'
+const PRIVATE_CHAT_PATH = '/api/ai/private-chat'
 const MAX_BODY_BYTES = 256
 const MAX_PRIVATE_BODY_BYTES = 4_096
+const MAX_PRIVATE_CHAT_BODY_BYTES = 12_288
 const MAX_PRIVATE_QUOTE_CHARS = 1_000
 const MAX_MODEL_OUTPUT_CHARS = 8192
 const SAFE_MESSAGE = '合成提问暂时不可用，请使用规则问题。'
 const PRIVATE_SAFE_MESSAGE = '千问提问暂时不可用，请继续使用本地问题。'
+const PRIVATE_CHAT_SAFE_MESSAGE = '千问对话暂时不可用，你的本地记录仍在。'
 // Model Studio's documented error codes; never relay an arbitrary provider string.
 const ALIBABA_ERROR_CODES = new Set([
   'AccessDenied', 'access_denied', 'AccessDenied.Unpurchased',
@@ -44,6 +48,12 @@ export interface PrivateQuestionProvider {
   generate(input: { entry: PrivateQuestionEntry; signal: AbortSignal }): Promise<string>
 }
 
+export interface PrivateChatProvider {
+  provider: 'qwen'
+  id: string
+  generate(input: { request: PrivateChatRequest; signal: AbortSignal }): Promise<string>
+}
+
 /** Carries only an upstream HTTP status and an allowlisted provider code. */
 export class ModelUpstreamHttpError extends Error {
   readonly upstreamCode?: string
@@ -61,6 +71,9 @@ export interface SyntheticQuestionServerOptions {
   /** A private provider alone cannot enable transmission of personal text. */
   privateProvider?: PrivateQuestionProvider
   privateAiEnabled?: boolean
+  /** Private chat must be enabled independently of the one-question experiment. */
+  privateChatProvider?: PrivateChatProvider
+  privateChatEnabled?: boolean
   maxCalls?: number
   maxPerMinute?: number
   timeoutMs?: number
@@ -79,13 +92,16 @@ function writeJson(response: ServerResponse, status: number, payload: object): v
   response.end(JSON.stringify(payload))
 }
 
-function writeError(response: ServerResponse, status: number, code: ErrorCode, isPrivate = false): void {
+function writeError(
+  response: ServerResponse, status: number, code: ErrorCode, kind: 'synthetic' | 'question' | 'chat' = 'synthetic',
+): void {
+  const unavailable = kind === 'chat' ? PRIVATE_CHAT_SAFE_MESSAGE :
+    kind === 'question' ? PRIVATE_SAFE_MESSAGE : SAFE_MESSAGE
   writeJson(response, status, {
     status: 'error', code,
     message: code === 'invalid_request' ? '请求格式无效。' :
-      code === 'rate_limited' ? (isPrivate ? '千问提问次数已达上限，请稍后再试。' :
-        '合成提问次数已达上限，请稍后再试。') :
-        (isPrivate ? PRIVATE_SAFE_MESSAGE : SAFE_MESSAGE),
+      code === 'rate_limited' ? (kind === 'synthetic' ? '合成提问次数已达上限，请稍后再试。' :
+        '千问调用次数已达上限，请稍后再试。') : unavailable,
   })
 }
 
@@ -137,16 +153,95 @@ function parsePrivateRequest(body: string | null): PrivateQuestionEntry | null {
   return { id: entry.id, revision: entry.revision, quote: entry.quote }
 }
 
+function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key))
+}
+
+function hasControlCharacter(value: string, allowInternalWhitespace = false): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0)
+    return code === 127 || (code < 32 &&
+      !(allowInternalWhitespace && (code === 9 || code === 10 || code === 13)))
+  })
+}
+
+/** A narrow backstop for explicit second-person diagnosis or fixed personality labels. */
+function makesUnsupportedPersonalClaim(value: string): boolean {
+  return /(?:你|您)(?:一定|可能|就是|是|属于|患有|得了|有).{0,12}(?:抑郁症|焦虑症|人格障碍|双相情感障碍|[^\s，。？！]{1,8}型人格)/.test(value)
+}
+
+function validChatReply(value: string): boolean {
+  return value === value.trim() && Array.from(value).length >= 1 && Array.from(value).length <= 280 &&
+    !hasControlCharacter(value) && !/https?:|www\.|```|<\/?\w/i.test(value) &&
+    !/(?:请|把|上传|发送|提供).{0,12}(?:密码|验证码|银行卡|身份证|完整记录)/.test(value) &&
+    !makesUnsupportedPersonalClaim(value)
+}
+
+function validChatQuestion(value: string | null): boolean {
+  return value === null || (value === value.trim() && Array.from(value).length >= 6 &&
+    Array.from(value).length <= 100 && /[？?]$/.test(value) &&
+    (value.match(/[？?]/g)?.length ?? 0) === 1 && !hasControlCharacter(value) &&
+    !/https?:|www\.|```|<\/?\w/i.test(value) &&
+    !/(?:请|把|上传|发送|提供).{0,12}(?:密码|验证码|银行卡|身份证|完整记录)/.test(value) &&
+    !makesUnsupportedPersonalClaim(value))
+}
+
+function parseChatSource(value: unknown): PrivateChatSource | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const source = value as Record<string, unknown>
+  if (!hasOnlyKeys(source, ['kind', 'id', 'revision', 'day', 'quote']) ||
+    typeof source.kind !== 'string' || !['entry', 'correction', 'control'].includes(source.kind) ||
+    typeof source.id !== 'string' || typeof source.revision !== 'number' ||
+    typeof source.day !== 'number' || typeof source.quote !== 'string') return null
+  const quoteLength = Array.from(source.quote).length
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(source.id) ||
+    !Number.isSafeInteger(source.revision) || source.revision < 1 ||
+    !Number.isSafeInteger(source.day) || source.day < 1 || source.day > 36_500 ||
+    quoteLength < 1 || quoteLength > 800 || source.quote !== source.quote.trim() ||
+    hasControlCharacter(source.quote, true)) return null
+  return source as unknown as PrivateChatSource
+}
+
+function parsePrivateChatRequest(body: string | null): PrivateChatRequest | null {
+  if (!body) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(body) } catch { return null }
+  // Re-encoding also rejects duplicate JSON keys rather than silently accepting the last one.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+    JSON.stringify(parsed) !== body) return null
+  const value = parsed as Record<string, unknown>
+  if (!(hasOnlyKeys(value, ['turn', 'context']) ||
+    hasOnlyKeys(value, ['turn', 'context', 'precedingAssistant'])) ||
+    !Array.isArray(value.context) || value.context.length > 2) return null
+  const turn = parseChatSource(value.turn)
+  const context = value.context.map(parseChatSource)
+  if (!turn || context.some((source) => !source)) return null
+  const sources = [turn, ...context] as PrivateChatSource[]
+  if (new Set(sources.map((source) => source.id)).size !== sources.length) return null
+  if (Object.hasOwn(value, 'precedingAssistant')) {
+    const prior = value.precedingAssistant
+    if (!prior || typeof prior !== 'object' || Array.isArray(prior)) return null
+    const assistant = prior as Record<string, unknown>
+    if (!hasOnlyKeys(assistant, ['reply', 'nextQuestion']) || typeof assistant.reply !== 'string' ||
+      !(assistant.nextQuestion === null || typeof assistant.nextQuestion === 'string') ||
+      !validChatReply(assistant.reply) || !validChatQuestion(assistant.nextQuestion)) return null
+  }
+  return value as unknown as PrivateChatRequest
+}
+
 function isLoopbackHost(host: string | undefined): boolean {
   return typeof host === 'string' && /^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$/i.test(host)
 }
 
-function isLoopbackOrigin(origin: string | undefined): boolean {
+function isSameLoopbackOrigin(origin: string | undefined, host: string | undefined): boolean {
   if (origin === undefined) return true
+  if (!host) return false
   try {
     const parsed = new URL(origin)
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+    return parsed.protocol === 'http:' &&
       (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') &&
+      parsed.origin.toLowerCase() === `http://${host.toLowerCase()}` &&
+      origin.toLowerCase() === parsed.origin.toLowerCase() &&
       !parsed.username && !parsed.password && parsed.pathname === '/' &&
       !parsed.search && !parsed.hash
   } catch {
@@ -219,6 +314,35 @@ function validatePrivateModelOutput(
   return { question, citations: [{ id: entry.id, quote: entry.quote }] }
 }
 
+function validatePrivateChatOutput(
+  raw: string, request: PrivateChatRequest,
+): Pick<PrivateChatResponse, 'reply' | 'nextQuestion' | 'citations'> | null {
+  if (raw.length > MAX_MODEL_OUTPUT_CHARS) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const value = parsed as Record<string, unknown>
+  if (!hasOnlyKeys(value, ['reply', 'nextQuestion', 'citations']) ||
+    typeof value.reply !== 'string' ||
+    !(value.nextQuestion === null || typeof value.nextQuestion === 'string') ||
+    !Array.isArray(value.citations) || value.citations.length > 3) return null
+  const reply = value.reply
+  const nextQuestion = value.nextQuestion
+  if (!validChatReply(reply) || !validChatQuestion(nextQuestion)) return null
+  const sources = new Map([request.turn, ...request.context].map((source) => [source.id, source.quote]))
+  const citations: Array<{ id: string; quote: string }> = []
+  for (const citation of value.citations) {
+    if (!citation || typeof citation !== 'object' || Array.isArray(citation)) return null
+    const record = citation as Record<string, unknown>
+    if (!hasOnlyKeys(record, ['id', 'quote']) || typeof record.id !== 'string' ||
+      typeof record.quote !== 'string' || !record.quote.trim() ||
+      !sources.get(record.id)?.includes(record.quote) ||
+      citations.some((item) => item.id === record.id)) return null
+    citations.push({ id: record.id, quote: record.quote })
+  }
+  return { reply, nextQuestion: nextQuestion as string | null, citations }
+}
+
 const mimeTypes: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png',
@@ -277,33 +401,41 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
 
   const server = createServer(async (request, response) => {
     const isPrivate = request.url === PRIVATE_API_PATH
-    if (request.url !== API_PATH && !isPrivate) {
+    const isChat = request.url === PRIVATE_CHAT_PATH
+    const kind = isChat ? 'chat' : isPrivate ? 'question' : 'synthetic'
+    if (request.url !== API_PATH && !isPrivate && !isChat) {
       await serveStatic(request, response, options.distDir)
       return
     }
-    if (!isLoopbackHost(request.headers.host) || !isLoopbackOrigin(request.headers.origin)) {
-      writeError(response, 400, 'invalid_request', isPrivate)
+    if (!isLoopbackHost(request.headers.host) ||
+      !isSameLoopbackOrigin(request.headers.origin, request.headers.host)) {
+      writeError(response, 400, 'invalid_request', kind)
       return
     }
     if (request.method !== 'POST' || request.headers['content-type'] !== 'application/json') {
-      writeError(response, 400, 'invalid_request', isPrivate)
+      writeError(response, 400, 'invalid_request', kind)
       return
     }
     let body: string | null
-    try { body = await readBoundedBody(request, isPrivate ? MAX_PRIVATE_BODY_BYTES : MAX_BODY_BYTES) } catch {
-      writeError(response, 400, 'invalid_request', isPrivate)
+    try {
+      body = await readBoundedBody(request,
+        isChat ? MAX_PRIVATE_CHAT_BODY_BYTES : isPrivate ? MAX_PRIVATE_BODY_BYTES : MAX_BODY_BYTES)
+    } catch {
+      writeError(response, 400, 'invalid_request', kind)
       return
     }
     const privateEntry = isPrivate ? parsePrivateRequest(body) : null
-    if (isPrivate ? !privateEntry : !validRequest(body)) {
-      writeError(response, 400, 'invalid_request', isPrivate)
+    const chatRequest = isChat ? parsePrivateChatRequest(body) : null
+    if (isChat ? !chatRequest : isPrivate ? !privateEntry : !validRequest(body)) {
+      writeError(response, 400, 'invalid_request', kind)
       return
     }
-    const model = isPrivate
-      ? (options.privateAiEnabled === true ? options.privateProvider : undefined)
-      : options.provider
+    const model = isChat
+      ? (options.privateChatEnabled === true ? options.privateChatProvider : undefined)
+      : isPrivate ? (options.privateAiEnabled === true ? options.privateProvider : undefined)
+        : options.provider
     if (!model) {
-      writeError(response, 503, 'model_not_configured', isPrivate)
+      writeError(response, 503, 'model_not_configured', kind)
       return
     }
     const now = Date.now()
@@ -313,7 +445,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     const address = request.socket.remoteAddress ?? 'unknown'
     const window = windowByAddress.get(address) ?? { start: now, count: 0 }
     if (modelCalls >= maxCalls || window.count >= maxPerMinute) {
-      writeError(response, 429, 'rate_limited', isPrivate)
+      writeError(response, 429, 'rate_limited', kind)
       return
     }
     window.count += 1
@@ -338,30 +470,43 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     })
     try {
       const raw = await Promise.race([
-        isPrivate
-          ? options.privateProvider!.generate({ entry: privateEntry!, signal: controller.signal })
-          : options.provider!.generate({
-            scenarioVersion: AHE_SCENARIO_VERSION,
-            snippets: AHE_SYNTHETIC_SNIPPETS,
-            confirmedContext: AHE_CONFIRMED_CONTEXT,
-            signal: controller.signal,
-          }),
+        isChat ? options.privateChatProvider!.generate({ request: chatRequest!, signal: controller.signal })
+          : isPrivate ? options.privateProvider!.generate({ entry: privateEntry!, signal: controller.signal })
+            : options.provider!.generate({
+              scenarioVersion: AHE_SCENARIO_VERSION,
+              snippets: AHE_SYNTHETIC_SNIPPETS,
+              confirmedContext: AHE_CONFIRMED_CONTEXT,
+              signal: controller.signal,
+            }),
         timeout,
       ])
       if (response.destroyed) return
       if (typeof raw !== 'string') {
-        writeError(response, 502, 'invalid_model_output', isPrivate)
+        writeError(response, 502, 'invalid_model_output', kind)
+        return
+      }
+      if (isChat) {
+        const result = validatePrivateChatOutput(raw, chatRequest!)
+        if (!result) {
+          writeError(response, 502, 'invalid_model_output', kind)
+          return
+        }
+        writeJson(response, 200, {
+          status: 'generated', ...result,
+          model: { provider: options.privateChatProvider!.provider, id: model.id },
+          generatedAt: new Date().toISOString(),
+        } satisfies PrivateChatResponse)
         return
       }
       const result = isPrivate
         ? validatePrivateModelOutput(raw, privateEntry!)
         : validateModelOutput(raw)
       if (result === 'no_reliable_citation') {
-        writeError(response, 422, result, isPrivate)
+        writeError(response, 422, result, kind)
         return
       }
       if (!result) {
-        writeError(response, 502, 'invalid_model_output', isPrivate)
+        writeError(response, 502, 'invalid_model_output', kind)
         return
       }
       writeJson(response, 200, isPrivate ? {
@@ -374,7 +519,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
       })
     } catch (error) {
       if (response.destroyed) return
-      if (error instanceof ModelUpstreamHttpError && !timedOut && !isPrivate) {
+      if (error instanceof ModelUpstreamHttpError && !timedOut && kind === 'synthetic') {
         writeJson(response, 503, {
           status: 'error', code: 'model_unavailable', message: SAFE_MESSAGE,
           upstreamStatus: error.upstreamStatus,
@@ -382,7 +527,7 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
         })
       } else {
         writeError(response, timedOut ? 504 : 503,
-          timedOut ? 'model_timeout' : 'model_unavailable', isPrivate)
+          timedOut ? 'model_timeout' : 'model_unavailable', kind)
       }
     } finally {
       if (timer) clearTimeout(timer)
