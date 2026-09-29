@@ -4,7 +4,8 @@ param(
   [string]$BaseUrl = '',
   [ValidateSet('qwen-plus', 'qwen-flash', 'qwen3.8-flash')]
   [string]$Model = 'qwen-plus',
-  [switch]$OneCall
+  [switch]$OneCall,
+  [switch]$EnablePrivateQuestions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,9 +26,14 @@ try {
   }
 
   Remove-Item Env:SOUL_ALBUM_AI_MAX_CALLS -ErrorAction SilentlyContinue
+  Remove-Item Env:SOUL_ALBUM_PRIVATE_AI_ENABLED -ErrorAction SilentlyContinue
   if ($OneCall) {
     $env:SOUL_ALBUM_AI_MAX_CALLS = '1'
     Write-Host 'One-call mode: this launch allows at most one upstream model attempt; an error also uses that attempt.'
+  }
+  if ($EnablePrivateQuestions) {
+    $env:SOUL_ALBUM_PRIVATE_AI_ENABLED = '1'
+    Write-Host 'Private-question route is available locally; each browser request still requires its own content preview and consent.'
   }
 
   Remove-Item Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue
@@ -66,7 +72,7 @@ try {
   node dist-server/server/index.js
   if ($LASTEXITCODE -ne 0) { throw "Model server exited with code $LASTEXITCODE" }
 } finally {
-  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL,Env:SOUL_ALBUM_QWEN_HTTPS_PROXY,Env:SOUL_ALBUM_AI_MAX_CALLS -ErrorAction SilentlyContinue
+  Remove-Item Env:DASHSCOPE_API_KEY,Env:SOUL_ALBUM_QWEN_BASE_URL,Env:SOUL_ALBUM_QWEN_MODEL,Env:SOUL_ALBUM_QWEN_HTTPS_PROXY,Env:SOUL_ALBUM_AI_MAX_CALLS,Env:SOUL_ALBUM_PRIVATE_AI_ENABLED -ErrorAction SilentlyContinue
   if ($secretPointer -ne [IntPtr]::Zero) {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPointer)
   }

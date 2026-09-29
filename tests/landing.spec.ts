@@ -8,7 +8,7 @@ test('the product opens directly in a private conversation', async ({ page }) =>
   const nav = page.getByRole('navigation', { name: '产品导航' })
   await expect(nav.getByRole('button')).toHaveCount(3)
   await expect(nav.getByRole('button', { name: '对话' })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByText('规则模式 · 仅本次页面')).toBeVisible()
+  await expect(page.getByText('规则模式 · 记录仅留本次页面')).toBeVisible()
   await expect(page.getByRole('textbox', { name: '发送消息' })).toBeVisible()
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: '主动分享' })).toHaveCount(0)

@@ -1,8 +1,8 @@
 export { LocalJournalService } from './journal.js'
 export type {
-  CorrectInterpretationRequest, DayPage, DeleteControlMessageRequest,
+  AdoptCloudQuestionRequest, CorrectInterpretationRequest, DayPage, DeleteControlMessageRequest,
   DisplayQuestionRequest, EditEntryRequest, EntryChangeRequest,
-  EntryChangeResult, MessageView, SendMessageRequest, SendMessageResult,
+  EntryChangeResult, MessageView, RecordQuestionCorrectionRequest, SendMessageRequest, SendMessageResult,
   SetDayTitleRequest,
 } from './journal.js'
 export { InMemorySpaceRepository, canonicalFingerprint } from './store.js'

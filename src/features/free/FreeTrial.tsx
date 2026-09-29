@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   cadenceForDay, changeCadence, createInvitationState, isInvitationDue,
   markInvitationShown, pauseInvitations, resumeInvitations, settleInvitation,
@@ -7,7 +7,11 @@ import {
 import { titleDaysAffectedByEntryChange, type Entry } from '../../domain/journal'
 import { createBrowserLocalSession } from '../../domain/browserLocalSession'
 import { classifyChatIntent } from '../../domain/chatIntent'
-import { selectAlbum, selectAnsweredQuestions, selectComparison } from '../../domain/selectors'
+import { selectAlbum, selectAnsweredQuestions } from '../../domain/selectors'
+import {
+  privateAiAvailableOnThisHost, privateQuestionPreview, requestPrivateQuestion,
+  validPrivateExcerpt, type PrivateQuestionPreview,
+} from './privateQuestion'
 import AlbumPage from '../album/AlbumPage'
 import DataInsights, { type BehaviorConsents, type BehaviorSource } from '../data/DataInsights'
 import '../../styles/product.css'
@@ -55,6 +59,14 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [status, setStatus] = useState('')
   const [printPending, setPrintPending] = useState(false)
   const [pendingEntryChange, setPendingEntryChange] = useState<EntryChange | null>(null)
+  const [privatePreview, setPrivatePreview] = useState<PrivateQuestionPreview | null>(null)
+  const [privateQuote, setPrivateQuote] = useState('')
+  const [privatePending, setPrivatePending] = useState(false)
+  const [privateError, setPrivateError] = useState('')
+  const [correctingQuestion, setCorrectingQuestion] = useState(false)
+  const [correctionDraft, setCorrectionDraft] = useState('')
+  const [comparisonFirstId, setComparisonFirstId] = useState('')
+  const [comparisonSecondId, setComparisonSecondId] = useState('')
   const printDialogRef = useRef<HTMLDialogElement>(null)
   const printOpenerRef = useRef<HTMLElement | null>(null)
   const titleConfirmRef = useRef<HTMLDialogElement>(null)
@@ -62,6 +74,24 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const titleConfirmFocusReturnRef = useRef<'opener' | 'status' | null>(null)
   const statusRef = useRef<HTMLParagraphElement>(null)
   const chatScrollRef = useRef<HTMLDivElement>(null)
+  const privateDialogRef = useRef<HTMLDialogElement>(null)
+  const privateOpenerRef = useRef<HTMLElement | null>(null)
+  const privateControllerRef = useRef<AbortController | null>(null)
+
+  useEffect(() => () => privateControllerRef.current?.abort(), [])
+
+  useLayoutEffect(() => {
+    if (!privatePreview) {
+      if (privateOpenerRef.current?.isConnected) privateOpenerRef.current.focus()
+      privateOpenerRef.current = null
+      return
+    }
+    const dialog = privateDialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    dialog.querySelector<HTMLButtonElement>('button:not([disabled])')?.focus()
+    return () => { if (dialog.open) dialog.close() }
+  }, [privatePreview])
 
   useLayoutEffect(() => {
     if (!printPending) {
@@ -162,6 +192,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const questionCount = cadence === 'weekly' ? 1 : 2
   const activeQuestion = snapshot.questions.find((question) => question.id === activeQuestionId)
   const visibleQuestionText = activeQuestion?.text ?? ''
+  const activeQuestionMode = activeQuestion?.provenance === 'cloud_model' ? '千问提议' : '规则模式'
+  const privateCandidate = privateAiAvailableOnThisHost(window.location.hostname)
+    ? privateQuestionPreview(snapshot, activeQuestion) : null
   function entrySourcePreview(entryId: string | undefined, revision: number | undefined): string | null {
     if (!entryId || revision === undefined) return null
     const source = snapshot.entries.find((entry) => entry.id === entryId && entry.revision === revision)
@@ -171,16 +204,29 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     const preview = characters.slice(0, 28).join('') + (characters.length > 28 ? '…' : '')
     return `关联第 ${session.dayForDate(source.journalDate)} 天 · 「${preview}」`
   }
-  const activeCitation = activeQuestion?.status === 'ready'
+  const activeEntryCitation = activeQuestion?.status === 'ready'
     ? activeQuestion.citations.find((citation) => citation.kind === 'entry') : undefined
-  const activeSourcePreview = entrySourcePreview(activeCitation?.id, activeCitation?.revision)
-  const recordedDays = [...new Set(journal.entries.map((entry) => entry.day))]
+  const activeObservationCitation = activeQuestion?.status === 'ready'
+    ? activeQuestion.citations.find((citation) => citation.kind === 'observation') : undefined
+  const activeObservation = snapshot.observations.find((observation) =>
+    observation.id === activeObservationCitation?.id &&
+    observation.revision === activeObservationCitation.revision)
+  const activeSourcePreview = entrySourcePreview(activeEntryCitation?.id, activeEntryCitation?.revision) ??
+    (activeObservation ? `依据你的纠正 · 「${Array.from(activeObservation.text).slice(0, 28).join('')}」` : null)
+  const todayCorrections = journal.observations.filter((observation) =>
+    observation.day === day && observation.status === 'corrected')
+  const recordedDays = [...new Set([
+    ...journal.entries.map((entry) => entry.day),
+    ...journal.observations.filter((observation) => observation.status === 'corrected')
+      .map((observation) => observation.day),
+  ])]
     .sort((first, second) => first - second)
   const albumDay = recordedDays.includes(viewedDay) ? viewedDay : recordedDays.at(-1) ?? day
   const album = selectAlbum(journal, albumDay)
-  const selectedDayIndex = recordedDays.indexOf(albumDay)
-  const comparison = selectedDayIndex > 0
-    ? selectComparison(journal, recordedDays[selectedDayIndex - 1], albumDay) : null
+  const earlierEntries = journal.entries.filter((entry) => entry.day < albumDay)
+  const currentPageEntries = journal.entries.filter((entry) => entry.day === albumDay)
+  const firstComparedEntry = earlierEntries.find((entry) => entry.id === comparisonFirstId)
+  const secondComparedEntry = currentPageEntries.find((entry) => entry.id === comparisonSecondId)
   const nextDay = nextDueDay(invitation, day)
   const dynamicNextDay = nextDay !== null && !DAYS.includes(nextDay as typeof DAYS[number]) &&
     (cadence !== 'daily' || invitation.pendingChange !== null)
@@ -211,10 +257,104 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setSnapshot(session.read())
   }
 
+  function openPrivateQuestionGate() {
+    const candidate = privateQuestionPreview(session.read(),
+      session.read().questions.find((question) => question.id === activeQuestionId))
+    if (!candidate || !privateAiAvailableOnThisHost(window.location.hostname)) {
+      setStatus('这条问题的来源已变化，继续使用本地规则问题。')
+      refresh()
+      return
+    }
+    privateOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setPrivateQuote(candidate.quote)
+    setPrivateError('')
+    setPrivatePreview(candidate)
+  }
+
+  function closePrivateQuestionGate() {
+    privateControllerRef.current?.abort()
+    privateControllerRef.current = null
+    setPrivatePending(false)
+    setPrivatePreview(null)
+    setPrivateQuote('')
+    setPrivateError('')
+  }
+
+  async function confirmPrivateQuestion() {
+    const preview = privatePreview
+    if (!preview || privatePending) return
+    if (!validPrivateExcerpt(preview.original, privateQuote)) {
+      setPrivateError('只能发送当前原话中连续、逐字一致的片段；如需改写，请先修改画册原话。')
+      return
+    }
+    const latest = session.read()
+    const currentQuestion = latest.questions.find((question) => question.id === preview.questionId)
+    const currentEntry = latest.entries.find((entry) => entry.id === preview.entryCitation.id)
+    if (latest.revision !== preview.expectedSpaceRevision ||
+      currentQuestion?.revision !== preview.expectedQuestionRevision ||
+      currentQuestion.status !== 'ready' || currentQuestion.id !== activeQuestionId ||
+      currentEntry?.revision !== preview.entryCitation.revision ||
+      !currentEntry.text.includes(privateQuote)) {
+      closePrivateQuestionGate()
+      refresh()
+      setStatus('原话或问题已变化，本次许可失效；规则问题仍在。')
+      return
+    }
+    const controller = new AbortController()
+    privateControllerRef.current = controller
+    setPrivatePending(true)
+    setPrivateError('')
+    try {
+      const proposal = await requestPrivateQuestion(preview, privateQuote, controller.signal)
+      if (controller.signal.aborted) return
+      session.adoptCloudQuestion({
+        expectedSpaceRevision: preview.expectedSpaceRevision,
+        questionId: preview.questionId,
+        expectedQuestionRevision: preview.expectedQuestionRevision,
+        entryCitation: preview.entryCitation,
+        entryQuote: privateQuote,
+        text: proposal.question,
+      })
+      refresh()
+      closePrivateQuestionGate()
+      setStatus('千问提议了下一问，已保留关联原话；若理解偏了，可以纠正。')
+    } catch {
+      if (controller.signal.aborted) return
+      closePrivateQuestionGate()
+      setStatus('这次模型提问未完成，规则问题仍在；没有自动重试。')
+    } finally {
+      if (privateControllerRef.current === controller) privateControllerRef.current = null
+      setPrivatePending(false)
+    }
+  }
+
   function showQuestion(targetDay: number, moment = false) {
     const next = session.displayNextQuestion(targetDay, moment)
     setActiveQuestionId(next.id)
+    setCorrectingQuestion(false)
+    setCorrectionDraft('')
     refresh()
+  }
+
+  function saveQuestionCorrection() {
+    const question = session.read().questions.find((item) => item.id === activeQuestionId)
+    const citation = question?.citations[0]
+    if (!question || question.provenance !== 'cloud_model' || question.status !== 'ready' ||
+      !citation || citation.kind !== 'entry' || !correctionDraft.trim()) return
+    try {
+      session.recordQuestionCorrection({
+        day,
+        questionId: question.id, expectedQuestionRevision: question.revision,
+        entryCitation: { id: citation.id, revision: citation.revision },
+        text: correctionDraft.trim(), expectedSpaceRevision: session.read().revision,
+      })
+      setViewedDay(day)
+      showQuestion(day)
+      setStatus('已记下你的纠正，当天画册会显示这次补充；接下来的问题改用它作依据。')
+    } catch {
+      setStatus('问题或来源已变化，请重新查看后再纠正。')
+      refresh()
+    }
   }
 
   function logControl(id: string, reply: string, promptQuestionId?: string) {
@@ -262,6 +402,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
 
   function viewRecordedDay(target: number) {
     setViewedDay(target)
+    setComparisonFirstId('')
+    setComparisonSecondId('')
     setEditingId(null)
     setEditDraft('')
     setEditingTitle(false)
@@ -466,7 +608,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
             {activeTab !== 'data' && <h1>{activeTab === 'chat' ? '聊聊今天' : '翻开画册'}</h1>}</div>
           <div className="product-header-meta">
             <span>第 {day} 天 · 演示日期 {session.dateForDay(day)} · {cadenceLabel[cadence]}{invitation.paused && ' · 已暂停'}</span>
-            <span>规则模式 · 仅本次页面</span>
+            <span>{activeQuestionMode} · 记录仅留本次页面</span>
             <button type="button" onClick={onReset} aria-label="清除本次内容">清除</button>
           </div>
         </header>
@@ -495,10 +637,13 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   return <div className="product-exchange" key={entry.id}>
                     {answered && !isProactive && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
-                      <div className="product-bubble"><small>心灵画册 · 当时的问题</small>
+                      <div className="product-bubble"><small>心灵画册 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
                         <p>{answered.status === 'ready' ? answered.text :
                           answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
-                        {answeredSourcePreview && <small className="product-question-source">{answeredSourcePreview}</small>}</div>
+                        {answeredSourcePreview && <small className="product-question-source">{answeredSourcePreview}</small>}
+                        {answered.mode === 'cloud' && answered.status === 'ready' && answered.approvedExcerpt &&
+                          <details className="product-question-evidence"><summary>查看当时发送给千问的片段</summary>
+                            <blockquote>“{answered.approvedExcerpt}”</blockquote></details>}</div>
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble">
                       <p>{entry.text}</p>
@@ -506,11 +651,29 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     </div></div>
                   </div>
                 })}
+                {todayCorrections.map((correction) => <div className="product-bubble-row user"
+                  aria-label="你补充的纠正" key={correction.id}>
+                  <div className="product-bubble"><small>你补充的准确背景 · 仅留本页</small><p>{correction.text}</p></div>
+                </div>)}
                 {(due || extraQuestion) && <div className="product-bubble-row agent current">
                   <span className="product-avatar" aria-hidden="true">画</span>
-                  <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'}</small>
+                  <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'} · {activeQuestionMode}</small>
                     <p>{visibleQuestionText}</p>
-                    {activeSourcePreview && <small className="product-question-source">{activeSourcePreview}</small>}</div>
+                    {activeSourcePreview && <small className="product-question-source">{activeSourcePreview}</small>}
+                    {activeQuestion?.provenance === 'cloud_model' && activeQuestion.approvedExcerpt &&
+                      <details className="product-question-evidence"><summary>查看这次发送给千问的片段</summary>
+                        <blockquote>“{activeQuestion.approvedExcerpt}”</blockquote></details>}
+                    {privateCandidate && <button type="button" className="product-question-action" onClick={openPrivateQuestionGate}>
+                      让千问提议这一问</button>}
+                    {activeQuestion?.provenance === 'cloud_model' && <div className="product-question-correction">
+                      {!correctingQuestion ? <button type="button" className="product-question-action" onClick={() => setCorrectingQuestion(true)}>理解偏了？补充背景</button> : <>
+                        <label htmlFor="private-correction">哪里不准确？用你的话写下更准确的背景</label>
+                        <textarea id="private-correction" value={correctionDraft} maxLength={1000} rows={3}
+                          onChange={(event) => setCorrectionDraft(event.target.value)} />
+                        <div><button type="button" onClick={() => { setCorrectingQuestion(false); setCorrectionDraft('') }}>取消</button>
+                          <button type="button" onClick={saveQuestionCorrection} disabled={!correctionDraft.trim()}>记下纠正并换一问</button></div>
+                      </>}
+                    </div>}</div>
                 </div>}
                 {!due && !extraQuestion && <div className="product-rest" role="note">
                   <strong>{roundClosed ? '今天的邀请已结束' : '第 ' + day + ' 天不邀请'}</strong>
@@ -560,9 +723,14 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               {album && <button type="button" className="guided-print" onClick={openPrintReminder}>打印当前页 ↗</button>}
             </div>
             {recordedDays.length > 0 && <nav className="free-day-nav product-album-days screen-only" aria-label="有记录日期">
-              {recordedDays.map((target) => <button type="button" key={target}
-                aria-label={'查看第 ' + target + ' 天'} aria-current={albumDay === target ? 'date' : undefined}
-                onClick={() => viewRecordedDay(target)}>第 {target} 天<small>{selectAlbum(journal, target)?.entries.length} 条原话</small></button>)}
+              {recordedDays.map((target) => {
+                const dayAlbum = selectAlbum(journal, target)
+                const correctionCount = dayAlbum?.observations.filter((item) => item.status === 'corrected').length ?? 0
+                return <button type="button" key={target}
+                  aria-label={'查看第 ' + target + ' 天'} aria-current={albumDay === target ? 'date' : undefined}
+                  onClick={() => viewRecordedDay(target)}>第 {target} 天<small>{dayAlbum?.entries.length} 条原话
+                    {correctionCount > 0 && ` · ${correctionCount} 条纠正`}</small></button>
+              })}
             </nav>}
             {album ? <>
               <div className="product-album-page"><AlbumPage mode="private" key={albumDay} album={album}
@@ -600,21 +768,46 @@ function FreeSession({ onReset }: { onReset: () => void }) {
             {album && <section className="free-comparison guided-comparison product-comparison screen-only"
               role="region" aria-label="前后两页摘录">
               <div className="guided-comparison-heading"><span className="guided-section-index">与过去相比</span>
-                <h2>前后两页摘录</h2><p>如已有两页问答记录，各取一条原话并列；规则模式不判断话题是否相关或变化原因。</p></div>
-              {comparison ? <div className="guided-comparison-pages">
-                {comparison.entries.map((entry) => <div key={entry.id}>
-                  <span>第 {entry.day} 天</span><blockquote>“{entry.text}”</blockquote><small>来源：{entry.source}</small>
+                <h2>前后两页摘录</h2><p>从不同记录日亲手选择两条原话并列；系统不判断话题是否相关，也不推断变化原因。</p></div>
+              {earlierEntries.length > 0 && currentPageEntries.length > 0 && <div className="product-compare-picker">
+                <label>较早的一条
+                  <select value={firstComparedEntry?.id ?? ''} onChange={(event) => setComparisonFirstId(event.target.value)}>
+                    <option value="">请选择</option>
+                    {earlierEntries.map((entry) => <option key={entry.id} value={entry.id}>
+                      第 {entry.day} 天 · {Array.from(entry.text).slice(0, 24).join('')}
+                    </option>)}
+                  </select>
+                </label>
+                <label>当前页的一条
+                  <select value={secondComparedEntry?.id ?? ''} onChange={(event) => setComparisonSecondId(event.target.value)}>
+                    <option value="">请选择</option>
+                    {currentPageEntries.map((entry) => <option key={entry.id} value={entry.id}>
+                      第 {entry.day} 天 · {Array.from(entry.text).slice(0, 24).join('')}
+                    </option>)}
+                  </select>
+                </label>
+              </div>}
+              {firstComparedEntry && secondComparedEntry ? <div className="guided-comparison-pages">
+                {[firstComparedEntry, secondComparedEntry].map((entry) => <div key={entry.id}>
+                  <span>第 {entry.day} 天</span><blockquote>“{entry.text}”</blockquote>
+                  <small>来源：{entry.source} · 演示日期时间 {entry.occurredAt.slice(0, 16).replace('T', ' ')}<br />
+                    本次录入时间 {entry.recordedAt.slice(0, 16).replace('T', ' ')}
+                    {entry.revision > 1 && ` · 当前第 ${entry.revision} 版`}</small>
                 </div>)}
-              </div> : <p className="free-insufficient">资料不足，暂时无法对照两天原话。</p>}
+              </div> : <p className="free-insufficient">{earlierEntries.length > 0 && currentPageEntries.length > 0
+                ? '请选择两条原话，看看你自己注意到什么。' : '资料不足，暂时无法对照两天原话。'}</p>}
             </section>}
             {album && <section className="free-question-history product-question-history screen-only"
               role="region" aria-label="已回答问题">
               <h2>本日已回答问题</h2>
               {answeredQuestions.length > 0 ? <ol>{answeredQuestions.map((item, index) => <li key={albumDay + '-' + index}>
                 <span>第 {albumDay} 天 · {item.status === 'reference-revised' ? '引用已有修订' :
-                  item.status === 'reference-deleted' ? '引用已删除' : '规则问题'}</span>
+                  item.status === 'reference-deleted' ? '引用已删除' : item.mode === 'cloud' ? '千问提议' : '规则问题'}</span>
                 <p>{item.status === 'ready' ? item.text :
                   item.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
+                {item.status === 'ready' && item.mode === 'cloud' && item.approvedExcerpt &&
+                  <details className="product-question-evidence"><summary>查看当时发送的片段</summary>
+                    <blockquote>“{item.approvedExcerpt}”</blockquote></details>}
               </li>)}</ol> : <p>这一天没有已回答的问题。</p>}
             </section>}
           </section>
@@ -624,7 +817,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
           </section>
         </div>
         <footer className="product-footer screen-only">
-          <p>这是可操作的前端演示：规则提问与模拟数据不会读取真实设备，也没有账号或长期保存。</p>
+          <p>默认规则提问。仅在本机逐次同意后，所选原话片段才会发给千问；模拟数据不读取真实设备，也没有账号或长期保存。</p>
         </footer>
       </div>
       {printPending && <dialog ref={printDialogRef} className="free-print-dialog screen-only" role="dialog"
@@ -653,6 +846,26 @@ function FreeSession({ onReset }: { onReset: () => void }) {
             取消{pendingEntryChange.kind === 'editEntry' ? '修改' : '删除'}</button>
           <button type="button" onClick={() => applyEntryChange(pendingEntryChange)}>
             继续{pendingEntryChange.kind === 'editEntry' ? '修改' : '删除'}</button>
+        </div>
+      </dialog>}
+      {privatePreview && <dialog ref={privateDialogRef} className="free-print-dialog product-private-dialog screen-only"
+        role="dialog" aria-modal="true" aria-labelledby="private-question-title"
+        onCancel={(event) => { event.preventDefault(); closePrivateQuestionGate() }}>
+        <p className="guided-section-index">单次隐私授权</p><h2 id="private-question-title">让千问提议这一问</h2>
+        <p>这一次只把下方片段、来源标识与修订版本送到本机服务；本机向阿里云百炼／千问转发片段和来源标识，不转发修订版本。内容会离开本次页面；服务方可能按其政策存储调用数据。其他画册记录、设备资料不会随这次请求发送。</p>
+        <label htmlFor="private-question-quote">实际发送的原话片段（可删减为原话中连续的一段）</label>
+        <textarea id="private-question-quote" value={privateQuote} maxLength={800} rows={5}
+          disabled={privatePending} onChange={(event) => { setPrivateQuote(event.target.value); setPrivateError('') }} />
+        <details><summary>查看完整请求内容</summary><pre>{JSON.stringify({ entry: {
+          id: privatePreview.entryCitation.id, revision: privatePreview.entryCitation.revision, quote: privateQuote,
+        } }, null, 2)}</pre></details>
+        <p>同意仅用于眼前这一问，不会开启自动发送。取消后继续使用当前规则问题。</p>
+        {privateError && <p role="alert">{privateError}</p>}
+        {privatePending && <p role="status">请求已发出。取消只放弃采纳结果；已发送内容无法撤回，也可能产生调用费用。</p>}
+        <div className="free-print-actions">
+          <button type="button" autoFocus onClick={closePrivateQuestionGate}>仅保留本地问题</button>
+          <button type="button" disabled={privatePending || !validPrivateExcerpt(privatePreview.original, privateQuote)}
+            onClick={() => void confirmPrivateQuestion()}>同意并发送这一次</button>
         </div>
       </dialog>}
     </main>

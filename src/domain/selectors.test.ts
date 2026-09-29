@@ -82,6 +82,30 @@ describe('derived album views', () => {
     expect(JSON.stringify(album)).not.toContain('心情')
   })
 
+  it('keeps every valid same-day correction in order while preserving the latest single-observation view', () => {
+    let state = answer(createJournalState('free'), 'e1', 1, '先记下晨间散步')
+    state = answer(state, 'e2', 1, '再记下晚间阅读')
+    for (const [id, entryId, text] of [
+      ['o1', 'e1', '第一次准确补充'],
+      ['o2', 'e2', '第二次准确补充'],
+    ]) {
+      state = journalReducer(state, {
+        type: 'addObservation', observation: { id, day: 1, text: '待确认解释', entryIds: [entryId], status: 'tentative' },
+      })
+      state = journalReducer(state, { type: 'correctObservation', id, text })
+    }
+
+    expect(selectAlbum(state, 1)?.observations.map((item) => item.text))
+      .toEqual(['第一次准确补充', '第二次准确补充'])
+    expect(selectAlbum(state, 1)?.observation?.text).toBe('第二次准确补充')
+
+    state = journalReducer(state, { type: 'editEntry', id: 'e1', text: '重新写过晨间散步', recordedAt: 'later' })
+    expect(selectAlbum(state, 1)?.observations.map((item) => item.text)).toEqual(['第二次准确补充'])
+    state = journalReducer(state, { type: 'deleteEntry', id: 'e2' })
+    expect(selectAlbum(state, 1)?.observations).toEqual([])
+    expect(JSON.stringify(selectAlbum(state, 1))).not.toMatch(/第一次准确补充|第二次准确补充/)
+  })
+
   it('does not render an unsupported observation even if malformed state is supplied', () => {
     const state = answer(createJournalState('story'), 'e1', 1, '当天事实')
     const malformed: JournalState = {

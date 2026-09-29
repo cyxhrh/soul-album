@@ -295,6 +295,8 @@ test('deletion scrubs an answer from questions, album comparison and print', asy
   await expect(page.locator('.product-exchange .product-question-source'))
     .toContainText('关联第 1 天 · 「PRIVATE_DELETE_928_我在旧书店停留」')
   await album(page)
+  await page.getByRole('region', { name: '前后两页摘录' }).getByLabel('较早的一条').selectOption({ index: 1 })
+  await page.getByRole('region', { name: '前后两页摘录' }).getByLabel('当前页的一条').selectOption({ index: 1 })
   await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText(secret)
   await page.getByRole('button', { name: '查看第 1 天' }).click()
   await page.getByRole('button', { name: '删除这条原话' }).click()

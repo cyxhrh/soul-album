@@ -44,12 +44,14 @@ export interface Question {
   revision: number
   text: string
   provenance: 'local_rule' | 'on_device_model' | 'cloud_model'
-  status: 'ready' | 'skipped' | 'citation_revised' | 'citation_deleted'
+  status: 'ready' | 'skipped' | 'user_corrected' | 'citation_revised' | 'citation_deleted'
   displayedAt: string
   answeredByMessageId?: string | null
   skippedByMessageId?: string | null
   invitationId?: string | null
   citations: CitationRef[]
+  /** The exact excerpt approved for one cloud request; withdrawn with its source. */
+  approvedExcerpt?: string
 }
 
 export interface Observation {
@@ -59,6 +61,9 @@ export interface Observation {
   provenance: Provenance
   citations: Array<{ kind: 'entry'; id: string; revision: number }>
   revision: number
+  /** Optional for observations written before correction-day tracking. */
+  journalDate?: string
+  recordedAt?: string
 }
 
 export interface DayTitle {

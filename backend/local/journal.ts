@@ -52,6 +52,28 @@ export interface DisplayQuestionRequest {
   invitationId?: string | null
 }
 
+/** A cloud response is a proposal, never a new question or a new source of record. */
+export interface AdoptCloudQuestionRequest {
+  clientOperationId: string
+  expectedSpaceRevision: number
+  questionId: string
+  expectedQuestionRevision: number
+  entryCitation: { id: string; revision: number }
+  entryQuote: string
+  text: string
+}
+
+/** The user's own correction replaces a mistaken cloud question and remains source-linked. */
+export interface RecordQuestionCorrectionRequest {
+  clientOperationId: string
+  expectedSpaceRevision: number
+  questionId: string
+  expectedQuestionRevision: number
+  entryCitation: { id: string; revision: number }
+  text: string
+  correctedAt: string
+}
+
 export interface SetDayTitleRequest {
   clientOperationId: string
   date: string
@@ -118,6 +140,14 @@ function entryById(draft: SpaceSnapshot, id: string): JournalEntry {
   return entry
 }
 
+function observationDate(snapshot: SpaceSnapshot, observation: Observation): string | null {
+  if (observation.citations.length === 0) return null
+  const sources = observation.citations.map((citation) => snapshot.entries.find((entry) =>
+    entry.id === citation.id && entry.revision === citation.revision))
+  if (sources.some((source) => !source)) return null
+  return observation.journalDate ?? sources[0]!.journalDate
+}
+
 function hasLaterQuestion(draft: SpaceSnapshot, question: Question): boolean {
   const index = draft.questions.findIndex((item) => item.id === question.id)
   return index >= 0 && draft.questions.slice(index + 1).length > 0
@@ -180,6 +210,7 @@ function invalidateDependencies(
       (citation.kind === 'observation' && affectedObservations.has(citation.id)))
     if (!affected || question.status === 'citation_revised' || question.status === 'citation_deleted') continue
     question.text = replacement
+    delete question.approvedExcerpt
     question.status = replacement === '引用已删除' ? 'citation_deleted' : 'citation_revised'
     question.revision += 1
     invalidatedQuestionIds.push(question.id)
@@ -261,6 +292,95 @@ export class LocalJournalService {
       }
       draft.questions.push(question)
       return question
+    })
+  }
+
+  adoptCloudQuestion(spaceId: string, request: AdoptCloudQuestionRequest): Question {
+    const citation = request.entryCitation
+    const excerptLength = typeof request.entryQuote === 'string' ? [...request.entryQuote].length : 0
+    if (typeof request.questionId !== 'string' || !request.questionId ||
+      !Number.isInteger(request.expectedQuestionRevision) || request.expectedQuestionRevision < 1 ||
+      !citation || typeof citation.id !== 'string' || !citation.id ||
+      !Number.isInteger(citation.revision) || citation.revision < 1 ||
+      excerptLength < 6 || excerptLength > 800 || request.entryQuote.trim() !== request.entryQuote ||
+      typeof request.text !== 'string' || request.text.length < 2 || request.text.length > 180 ||
+      request.text.trim() !== request.text ||
+      [...request.text].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) {
+      throw new LocalDomainError('invalid_input')
+    }
+    const fingerprint = commandFingerprint(
+      'adoptCloudQuestion', request.expectedSpaceRevision, request.questionId,
+      request.expectedQuestionRevision, citation, request.entryQuote, request.text,
+    )
+    return this.repository.transact(spaceId, {
+      clientOperationId: request.clientOperationId, fingerprint,
+      expectedSpaceRevision: request.expectedSpaceRevision,
+    }, (draft) => {
+      const question = draft.questions.find((item) => item.id === request.questionId)
+      const entry = draft.entries.find((item) => item.id === citation.id)
+      if (!question || !entry) throw new LocalDomainError('revision_conflict')
+      if (draft.questions.at(-1)?.id !== question.id ||
+        question.revision !== request.expectedQuestionRevision ||
+        question.status !== 'ready' || question.answeredByMessageId || question.skippedByMessageId ||
+        question.provenance !== 'local_rule' ||
+        entry.revision !== citation.revision ||
+        !entry.text.includes(request.entryQuote) ||
+        question.citations.length !== 1 ||
+        question.citations[0].kind !== 'entry' ||
+        question.citations[0].id !== citation.id ||
+        question.citations[0].revision !== citation.revision) {
+        throw new LocalDomainError('revision_conflict')
+      }
+      question.text = request.text
+      question.approvedExcerpt = request.entryQuote
+      question.provenance = 'cloud_model'
+      question.revision += 1
+      return question
+    })
+  }
+
+  recordQuestionCorrection(spaceId: string, request: RecordQuestionCorrectionRequest): Observation {
+    requireText(request.text)
+    const citation = request.entryCitation
+    if (typeof request.questionId !== 'string' || !request.questionId ||
+      !Number.isInteger(request.expectedQuestionRevision) || request.expectedQuestionRevision < 1 ||
+      !citation || typeof citation.id !== 'string' || !citation.id ||
+      !Number.isInteger(citation.revision) || citation.revision < 1 ||
+      typeof request.correctedAt !== 'string') {
+      throw new LocalDomainError('invalid_input')
+    }
+    const fingerprint = commandFingerprint(
+      'recordQuestionCorrection', request.expectedSpaceRevision, request.questionId,
+      request.expectedQuestionRevision, citation, request.text, request.correctedAt,
+    )
+    return this.repository.transact(spaceId, {
+      clientOperationId: request.clientOperationId, fingerprint,
+      expectedSpaceRevision: request.expectedSpaceRevision,
+    }, (draft) => {
+      const correctionDate = journalDate(request.correctedAt, draft.timezone)
+      const question = draft.questions.find((item) => item.id === request.questionId)
+      const entry = draft.entries.find((item) => item.id === citation.id)
+      if (!question || !entry || draft.questions.at(-1)?.id !== question.id ||
+        correctionDate < journalDate(question.displayedAt, draft.timezone) ||
+        question.revision !== request.expectedQuestionRevision ||
+        question.status !== 'ready' || question.answeredByMessageId || question.skippedByMessageId ||
+        question.provenance !== 'cloud_model' || entry.revision !== citation.revision ||
+        question.citations.length !== 1 || question.citations[0].kind !== 'entry' ||
+        question.citations[0].id !== citation.id ||
+        question.citations[0].revision !== citation.revision) {
+        throw new LocalDomainError('revision_conflict')
+      }
+      question.text = '理解已更正'
+      question.status = 'user_corrected'
+      question.revision += 1
+      const observation: Observation = {
+        id: this.newId(), text: request.text.trim(), status: 'user_corrected',
+        provenance: 'user_correction',
+        citations: [{ kind: 'entry', id: citation.id, revision: citation.revision }],
+        revision: 1, journalDate: correctionDate, recordedAt: this.now(),
+      }
+      draft.observations.push(observation)
+      return observation
     })
   }
 
@@ -518,17 +638,24 @@ export class LocalJournalService {
 
   listDays(spaceId: string): { spaceId: string; spaceRevision: number; dates: string[] } {
     const snapshot = this.repository.read(spaceId)
+    const observationDates = snapshot.observations.flatMap((observation) => {
+      const date = observationDate(snapshot, observation)
+      return date ? [date] : []
+    })
     return {
       spaceId: snapshot.id, spaceRevision: snapshot.revision,
-      dates: [...new Set(snapshot.entries.map((entry) => entry.journalDate))].sort().reverse(),
+      dates: [...new Set([
+        ...snapshot.entries.map((entry) => entry.journalDate), ...observationDates,
+      ])].sort().reverse(),
     }
   }
 
   getDay(spaceId: string, date: string): DayPage | null {
     const snapshot = this.repository.read(spaceId)
     const entries = snapshot.entries.filter((entry) => entry.journalDate === date)
-    if (entries.length === 0) return null
-    const entryIds = new Set(entries.map((entry) => entry.id))
+    const observations = snapshot.observations.filter((observation) =>
+      observationDate(snapshot, observation) === date)
+    if (entries.length === 0 && observations.length === 0) return null
     const messageIds = new Set(entries.map((entry) => entry.messageId))
     return {
       spaceId: snapshot.id, spaceRevision: snapshot.revision, date, timezone: snapshot.timezone,
@@ -536,8 +663,7 @@ export class LocalJournalService {
       questions: snapshot.questions.filter((question) =>
         journalDate(question.displayedAt, snapshot.timezone) === date ||
         (question.answeredByMessageId && messageIds.has(question.answeredByMessageId))),
-      observations: snapshot.observations.filter((observation) =>
-        observation.citations.some((citation) => entryIds.has(citation.id))),
+      observations,
     }
   }
 
@@ -550,7 +676,8 @@ export class LocalJournalService {
       clientOperationId: request.clientOperationId, fingerprint,
       expectedSpaceRevision: request.expectedSpaceRevision,
     }, (draft) => {
-      if (!draft.entries.some((entry) => entry.journalDate === request.date)) {
+      if (!draft.entries.some((entry) => entry.journalDate === request.date) &&
+        !draft.observations.some((observation) => observationDate(draft, observation) === request.date)) {
         throw new LocalDomainError('not_found')
       }
       const previous = draft.titles[request.date]

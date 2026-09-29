@@ -13,6 +13,25 @@ export interface BrowserLocalSessionOptions {
   now?: Clock
 }
 
+export interface BrowserCloudQuestionProposal {
+  expectedSpaceRevision: number
+  questionId: string
+  expectedQuestionRevision: number
+  entryCitation: { id: string; revision: number }
+  /** The exact excerpt shown in the privacy gate and sent to the provider. */
+  entryQuote: string
+  text: string
+}
+
+export interface BrowserQuestionCorrection {
+  day: number
+  questionId: string
+  expectedQuestionRevision: number
+  entryCitation: { id: string; revision: number }
+  text: string
+  expectedSpaceRevision?: number
+}
+
 function uuid(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   const bytes = crypto.getRandomValues(new Uint8Array(16))
@@ -131,11 +150,53 @@ export class BrowserLocalSession {
 
   displayNextQuestion(day: number, moment = false): Question {
     if (moment) return this.displayQuestion(day, 'moment', [])
-    const entry = [...this.read().entries].reverse().find((item) =>
+    const snapshot = this.read()
+    const corrected = [...snapshot.observations].reverse().find((observation) => {
+      if (observation.status !== 'user_corrected' ||
+        snapshot.questions.some((question) => question.citations.some((citation) =>
+          citation.kind === 'observation' && citation.id === observation.id))) return false
+      const source = snapshot.entries.find((entry) => entry.id === observation.citations[0]?.id)
+      return !!source && source.revision === observation.citations[0].revision &&
+        this.dayForDate(observation.journalDate ?? source.journalDate) <= day
+    })
+    if (corrected) return this.displayQuestion(day, 'reflection', [
+      { kind: 'observation', id: corrected.id, revision: corrected.revision },
+    ])
+    const entry = [...snapshot.entries].reverse().find((item) =>
       this.dayForDate(item.journalDate) <= day)
     return entry
       ? this.displayQuestion(day, 'reflection', [{ kind: 'entry', id: entry.id, revision: entry.revision }])
       : this.displayQuestion(day, 'open', [])
+  }
+
+  adoptCloudQuestion(proposal: BrowserCloudQuestionProposal): Question {
+    const snapshot = this.read()
+    const entry = snapshot.entries.find((item) => item.id === proposal.entryCitation.id)
+    if (!entry || entry.revision !== proposal.entryCitation.revision ||
+      typeof proposal.entryQuote !== 'string' || proposal.entryQuote !== proposal.entryQuote.trim() ||
+      [...proposal.entryQuote].length < 6 || [...proposal.entryQuote].length > 800 ||
+      !entry.text.includes(proposal.entryQuote)) {
+      throw new Error('cloud question source is no longer current')
+    }
+    return this.journal.adoptCloudQuestion(this.spaceId, {
+      clientOperationId: uuid(), expectedSpaceRevision: proposal.expectedSpaceRevision,
+      questionId: proposal.questionId,
+      expectedQuestionRevision: proposal.expectedQuestionRevision,
+      entryCitation: proposal.entryCitation, entryQuote: proposal.entryQuote,
+      text: proposal.text,
+    })
+  }
+
+  recordQuestionCorrection(correction: BrowserQuestionCorrection) {
+    const snapshot = this.read()
+    return this.journal.recordQuestionCorrection(this.spaceId, {
+      clientOperationId: uuid(),
+      expectedSpaceRevision: correction.expectedSpaceRevision ?? snapshot.revision,
+      questionId: correction.questionId,
+      expectedQuestionRevision: correction.expectedQuestionRevision,
+      entryCitation: correction.entryCitation, text: correction.text,
+      correctedAt: wallTimestamp(this.dateForDay(correction.day), this.now(), this.timezone),
+    })
   }
 
   sendMessage(day: number, text: string, visibleQuestionId?: string | null) {
@@ -174,6 +235,7 @@ export class BrowserLocalSession {
   /** A read-only compatibility projection for the existing album and comparison selectors. */
   projectJournal(snapshot: SpaceSnapshot): JournalState {
     const messageById = new Map(snapshot.messages.map((message) => [message.id, message]))
+    const sourceEntryById = new Map(snapshot.entries.map((entry) => [entry.id, entry]))
     const entries = snapshot.entries.map((entry) => {
       const day = this.dayForDate(entry.journalDate)
       const kind = messageById.get(entry.messageId)?.interpretation.kind
@@ -193,7 +255,9 @@ export class BrowserLocalSession {
       const citationObservation = question.citations.find((item) => item.kind === 'observation')
       questions[day] ??= []
       questions[day].push({
-        day, text: question.text, answerEntryId: message.entryId,
+        day, text: question.text, provenance: question.provenance,
+        ...(question.approvedExcerpt ? { approvedExcerpt: question.approvedExcerpt } : {}),
+        answerEntryId: message.entryId,
         citationEntryId: citationEntry?.id, citationEntryRevision: citationEntry?.revision,
         citationObservationId: citationObservation?.id,
         citationObservationRevision: citationObservation?.revision,
@@ -208,8 +272,23 @@ export class BrowserLocalSession {
         dependencyEntryIds: title.dependencyEntryIds,
       }
     }
+    const observations: JournalState['observations'] = snapshot.observations.flatMap((observation) => {
+      if (observation.status !== 'user_corrected' || observation.provenance !== 'user_correction' ||
+        observation.citations.length === 0) {
+        return []
+      }
+      const sources = observation.citations.map((citation) => sourceEntryById.get(citation.id))
+      if (sources.some((source, index) => !source ||
+        source.revision !== observation.citations[index].revision)) return []
+      return [{
+        id: observation.id, day: this.dayForDate(observation.journalDate ?? sources[0]!.journalDate),
+        text: observation.text, entryIds: observation.citations.map((citation) => citation.id),
+        status: 'corrected' as const, source: 'user-correction' as const,
+        revision: observation.revision,
+      }]
+    })
     return {
-      spaceId: snapshot.id, entries, titles, questions, observations: [],
+      spaceId: snapshot.id, entries, titles, questions, observations,
       sourceConsents: {}, sourceFacts: [],
     }
   }

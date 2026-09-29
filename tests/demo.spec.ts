@@ -338,9 +338,11 @@ test('editing a cited answer updates the next question and keeps the two-day com
   await send(page, '今天看见了橙色的晚霞。')
   await openAlbum(page)
   const comparison = page.getByRole('region', { name: '前后两页摘录' })
+  await comparison.getByLabel('较早的一条').selectOption({ index: 1 })
+  await comparison.getByLabel('当前页的一条').selectOption({ index: 1 })
   await expect(comparison).toContainText('金色的晚霞')
   await expect(comparison).toContainText('橙色的晚霞')
-  await expect(comparison).toContainText('各取一条原话并列')
+  await expect(comparison).toContainText('亲手选择两条原话并列')
   await expect(comparison).not.toContainText('情绪')
   await page.emulateMedia({ media: 'print' })
   const printed = page.locator('.print-page:visible')
@@ -399,7 +401,7 @@ test('unrelated proactive notes do not claim a shared comparison topic', async (
   await send(page, '今天先不聊了')
   await send(page, '今天处理了公交卡。')
   await openAlbum(page)
-  await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText('资料不足')
+  await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText('请选择两条原话')
 })
 
 test('long private text wraps in chat, album and print at phone width', async ({ page }) => {
