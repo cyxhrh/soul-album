@@ -15,7 +15,7 @@ describe('Qwen OpenAI-compatible provider', () => {
     expect(createQwenProviderFromEnv({ DASHSCOPE_API_KEY: 'test-secret' })).toBeUndefined()
   })
 
-  it.each(['qwen-plus', 'qwen-flash'])('sends only the fixed synthetic input with %s configuration', async (modelId) => {
+  it.each(['qwen-plus', 'qwen-flash', 'qwen3.8-flash'])('sends only the fixed synthetic input with %s configuration', async (modelId) => {
     const requests: { url: string; init: RequestInit }[] = []
     const fetcher: typeof fetch = async (input, init) => {
       requests.push({ url: String(input), init: init ?? {} })

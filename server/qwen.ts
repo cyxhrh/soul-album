@@ -179,7 +179,7 @@ export function createQwenProviderFromEnv(
         },
         body: JSON.stringify({
           model: modelId, stream: false, temperature: 0.35, max_tokens: 256,
-          ...(['qwen-plus', 'qwen-flash'].includes(modelId) ? { enable_thinking: false } : {}),
+          ...(['qwen-plus', 'qwen-flash', 'qwen3.8-flash'].includes(modelId) ? { enable_thinking: false } : {}),
           response_format: { type: 'json_object' },
           messages: [{ role: 'system', content: system }, { role: 'user', content: data }],
         }),

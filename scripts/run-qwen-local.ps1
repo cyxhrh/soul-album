@@ -2,7 +2,7 @@ param(
   [ValidateSet('cn', 'intl', 'us')]
   [string]$Region = 'cn',
   [string]$BaseUrl = '',
-  [ValidateSet('qwen-plus', 'qwen-flash')]
+  [ValidateSet('qwen-plus', 'qwen-flash', 'qwen3.8-flash')]
   [string]$Model = 'qwen-plus',
   [switch]$OneCall
 )

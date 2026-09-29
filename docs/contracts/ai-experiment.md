@@ -1,10 +1,10 @@
 # 下一阶段：受限合成 AI 提问接口契约
 
-**状态：本地接口与页面已接线，真实请求已到达上游，成功生成仍未验证。** 本接口只用于可复核的阿禾合成数据实验，不接收自由试用正文，不提供账号同步。当前默认对话仍为本地规则模式；无密钥时合成实验明确显示 `model_not_configured` 与规则示例。服务端单元测试中的假提供方只验证接线和校验，不算真实模型成功调用或参赛佐证。
+**状态：本地接口与页面已接线；2026-09-29 使用北京地域 `qwen3.8-flash` 完成一次真实合成数据调用并通过服务端字面校验。** 具体请求与人工评估见 [真实调用记录](../evidence/2026-09-29-qwen38-flash-synthetic-trial.md)。本接口只用于可复核的阿禾合成数据实验，不接收自由试用正文，不提供账号同步。当前默认对话仍为本地规则模式；无密钥时合成实验明确显示 `model_not_configured` 与规则示例。服务端单元测试中的假提供方只验证接线和校验，不算真实模型成功调用或参赛佐证。
 
 ## 请求
 
-`POST /api/ai/synthetic-question`，同源 HTTPS，`Content-Type: application/json`。唯一可接受的 JSON 对象是：
+`POST /api/ai/synthetic-question`，本机实验使用同源回环 HTTP；若未来公开部署则应使用同源 HTTPS。`Content-Type: application/json`。唯一可接受的 JSON 对象是：
 
 ```json
 { "scenario": "ahe" }
