@@ -15,9 +15,11 @@
   --chat-muted: #687467;
   --chat-action: #477955;
 }
-.product-brand { grid-template-columns: 26px 1fr; column-gap: 10px; }
-.product-brand-mark { grid-row: span 2; display: grid; place-items: center; }
-.product-brand strong { font-size: 18px; }
+.product-brand { grid-template-columns: 36px 1fr; column-gap: 11px; padding-inline: 10px; }
+.product-brand-mark { grid-row: span 2; display: grid; place-items: center; width: 36px; height: 36px; }
+.product-brand-mark img { display: block; width: 100%; height: 100%; }
+.product-brand strong { align-self: end; color: #395846; font-size: 19px; font-weight: 600; line-height: 1.2; letter-spacing: .08em; }
+.product-brand small { align-self: start; margin-top: 5px; font-size: 10px; line-height: 1.5; letter-spacing: 0; }
 .product-nav-links button { display: flex; align-items: center; gap: 13px; }
 .product-nav-links button[aria-current="page"]::before { display: none; }
 .messenger-contact-preview { display: none; }

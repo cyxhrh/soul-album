@@ -1372,7 +1372,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   return (
     <main className={'product-shell product-tab-' + activeTab + (voiceConversation ? ' product-shell-call' : '')} aria-label="渐知产品">
       <nav className="product-nav screen-only" aria-label="产品导航" hidden={voiceConversation}>
-        <div className="product-brand"><span className="product-brand-mark"><ProductIcon name="album" /></span>
+        <div className="product-brand"><span className="product-brand-mark" aria-hidden="true">
+          <img src={`${import.meta.env.BASE_URL}brand/jianzhi-sprout.svg`} alt="" width="36" height="36" draggable={false} /></span>
           <strong>渐知</strong><small>慢慢认识你</small></div>
         <div className="product-nav-links">
           <button type="button" aria-current={activeTab === 'chat' ? 'page' : undefined} onClick={() => setActiveTab('chat')}><ProductIcon name="chat" /><span>对话</span></button>
