@@ -4,13 +4,22 @@ import {
   type Question, type SpaceSnapshot,
 } from '../../backend/local/index.js'
 import type { JournalState, QuestionRecord } from './journal'
+import type { ChatOpeningId } from '../../shared/chatOpening.js'
 
 type Clock = () => Date
+
+export interface BrowserLocalSessionState {
+  snapshot: SpaceSnapshot
+  dayOneDate: string
+  firstQuestionId: string
+}
 
 export interface BrowserLocalSessionOptions {
   dayOneDate?: string
   timezone?: string
   now?: Clock
+  openingId?: ChatOpeningId
+  restore?: BrowserLocalSessionState
 }
 
 export interface BrowserCloudQuestionProposal {
@@ -100,18 +109,36 @@ export class BrowserLocalSession {
   private readonly journal: LocalJournalService
 
   constructor(options: BrowserLocalSessionOptions = {}) {
+    if (options.restore !== undefined && (!options.restore || typeof options.restore !== 'object' ||
+      typeof options.restore.dayOneDate !== 'string' || typeof options.restore.firstQuestionId !== 'string')) {
+      throw new Error('invalid session restore state')
+    }
     this.now = options.now ?? (() => new Date())
-    this.timezone = options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-    this.dayOneDate = options.dayOneDate ?? calendarDate(this.now(), this.timezone)
-    this.spaceId = uuid()
+    this.timezone = options.restore?.snapshot?.timezone ?? options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+    this.dayOneDate = options.restore?.dayOneDate ?? options.dayOneDate ?? calendarDate(this.now(), this.timezone)
+    if (typeof this.dayOneDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(this.dayOneDate) ||
+      !Number.isFinite(Date.parse(`${this.dayOneDate}T00:00:00Z`)) ||
+      new Date(`${this.dayOneDate}T00:00:00Z`).toISOString().slice(0, 10) !== this.dayOneDate) {
+      throw new Error('invalid session date')
+    }
+    this.spaceId = options.restore?.snapshot?.id ?? uuid()
     this.repository = new InMemorySpaceRepository({
       now: () => this.now().toISOString(), newId: uuid,
     })
-    this.repository.createSpace(this.spaceId, this.timezone)
+    if (options.restore) {
+      const snapshot = this.repository.restoreSpace(options.restore.snapshot)
+      if (!snapshot.questions.some((question) => question.id === options.restore!.firstQuestionId)) {
+        throw new Error('invalid first question reference')
+      }
+    } else this.repository.createSpace(this.spaceId, this.timezone)
     this.journal = new LocalJournalService(this.repository, {
       now: () => this.now().toISOString(), newId: uuid,
     })
-    this.firstQuestionId = this.displayQuestion(1, 'open', []).id
+    this.firstQuestionId = options.restore?.firstQuestionId ?? this.displayQuestion(1, 'open', [], options.openingId).id
+  }
+
+  exportState(): BrowserLocalSessionState {
+    return { snapshot: this.read(), dayOneDate: this.dayOneDate, firstQuestionId: this.firstQuestionId }
   }
 
   read(): SpaceSnapshot {
@@ -141,10 +168,11 @@ export class BrowserLocalSession {
     return this.journal.getDay(this.spaceId, this.dateForDay(day))
   }
 
-  displayQuestion(day: number, kind: 'open' | 'moment' | 'reflection', citations: CitationRef[]): Question {
+  displayQuestion(day: number, kind: 'open' | 'moment' | 'reflection', citations: CitationRef[], openingId?: ChatOpeningId): Question {
     return this.journal.displayQuestion(this.spaceId, {
       clientOperationId: uuid(), expectedSpaceRevision: this.read().revision,
       kind, citations, displayedAt: wallTimestamp(this.dateForDay(day), this.now(), this.timezone),
+      ...(openingId ? { openingId } : {}),
     })
   }
 

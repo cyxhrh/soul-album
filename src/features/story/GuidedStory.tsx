@@ -54,7 +54,7 @@ export default function GuidedStory({ onBack, onEnterFreeTrial }: GuidedStoryPro
     <main className="guided-shell" aria-label="阿禾引导剧情">
       <header className="guided-header screen-only">
         <div>
-          <p className="guided-brand">心灵画册 <span>/</span> 剧情引导</p>
+          <p className="guided-brand">渐知 <span>/</span> 剧情引导</p>
           <h1>阿禾的两天</h1>
           <p>跟着一位合成人物，看两句回答如何变成日页，以及一次纠正怎样改变明天的问题。</p>
         </div>

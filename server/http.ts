@@ -5,14 +5,19 @@ import {
   AHE_CONFIRMED_CONTEXT, AHE_SCENARIO_VERSION, AHE_SYNTHETIC_SNIPPETS,
 } from '../shared/aheScenario.js'
 import type { PrivateChatRequest, PrivateChatResponse, PrivateChatSource } from '../shared/privateChat.js'
+import { isChatOpeningId } from '../shared/chatOpening.js'
+import { MAX_DAILY_MESSAGES, MAX_DAILY_TEXT_CHARS,
+  type DailyAlbumContent, type DailyAlbumRequest, type DailyAlbumResponse } from '../shared/dailyAlbum.js'
 
 const API_PATH = '/api/ai/synthetic-question'
 const PRIVATE_API_PATH = '/api/ai/private-question'
 const PRIVATE_CHAT_PATH = '/api/ai/private-chat'
+const DAILY_ALBUM_PATH = '/api/ai/daily-album'
 const MODEL_STATUS_PATH = '/api/ai/model-status'
 const MAX_BODY_BYTES = 256
 const MAX_PRIVATE_BODY_BYTES = 4_096
 const MAX_PRIVATE_CHAT_BODY_BYTES = 12_288
+const MAX_DAILY_ALBUM_BODY_BYTES = 262_144
 const MAX_PRIVATE_QUOTE_CHARS = 1_000
 const MAX_MODEL_OUTPUT_CHARS = 8192
 const SAFE_MESSAGE = '合成提问暂时不可用，请使用规则问题。'
@@ -55,6 +60,12 @@ export interface PrivateChatProvider {
   generate(input: { request: PrivateChatRequest; signal: AbortSignal }): Promise<string>
 }
 
+export interface DailyAlbumProvider {
+  provider: string
+  id: string
+  generate(input: { request: DailyAlbumRequest; signal: AbortSignal }): Promise<string>
+}
+
 /** Carries only an upstream HTTP status and an allowlisted provider code. */
 export class ModelUpstreamHttpError extends Error {
   readonly upstreamCode?: string
@@ -75,6 +86,8 @@ export interface SyntheticQuestionServerOptions {
   /** Private chat must be enabled independently of the one-question experiment. */
   privateChatProvider?: PrivateChatProvider
   privateChatEnabled?: boolean
+  /** Shares the explicit private-chat opt-in; uses a separate generation contract. */
+  dailyAlbumProvider?: DailyAlbumProvider
   maxCalls?: number
   maxPerMinute?: number
   timeoutMs?: number
@@ -94,9 +107,9 @@ function writeJson(response: ServerResponse, status: number, payload: object): v
 }
 
 function writeError(
-  response: ServerResponse, status: number, code: ErrorCode, kind: 'synthetic' | 'question' | 'chat' = 'synthetic',
+  response: ServerResponse, status: number, code: ErrorCode, kind: 'synthetic' | 'question' | 'chat' | 'album' = 'synthetic',
 ): void {
-  const unavailable = kind === 'chat' ? PRIVATE_CHAT_SAFE_MESSAGE :
+  const unavailable = kind === 'album' ? '今天的画册暂时无法整理，完整记录仍在本机。' : kind === 'chat' ? PRIVATE_CHAT_SAFE_MESSAGE :
     kind === 'question' ? PRIVATE_SAFE_MESSAGE : SAFE_MESSAGE
   writeJson(response, status, {
     status: 'error', code,
@@ -212,8 +225,11 @@ function parsePrivateChatRequest(body: string | null): PrivateChatRequest | null
     JSON.stringify(parsed) !== body) return null
   const value = parsed as Record<string, unknown>
   if (!(hasOnlyKeys(value, ['turn', 'context']) ||
-    hasOnlyKeys(value, ['turn', 'context', 'precedingAssistant'])) ||
+    hasOnlyKeys(value, ['turn', 'context', 'precedingAssistant']) ||
+    hasOnlyKeys(value, ['turn', 'context', 'openingId'])) ||
     !Array.isArray(value.context) || value.context.length > 2) return null
+  if (Object.hasOwn(value, 'openingId') &&
+    (!isChatOpeningId(value.openingId) || value.context.length !== 0)) return null
   const turn = parseChatSource(value.turn)
   const context = value.context.map(parseChatSource)
   if (!turn || context.some((source) => !source)) return null
@@ -228,6 +244,75 @@ function parsePrivateChatRequest(body: string | null): PrivateChatRequest | null
       !validChatReply(assistant.reply) || !validChatQuestion(assistant.nextQuestion)) return null
   }
   return value as unknown as PrivateChatRequest
+}
+
+function parseDailyAlbumRequest(body: string | null): DailyAlbumRequest | null {
+  if (!body) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(body) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+    JSON.stringify(parsed) !== body) return null
+  const value = parsed as Record<string, unknown>
+  if (!hasOnlyKeys(value, ['date', 'messages']) || typeof value.date !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value.date) ||
+    !Number.isFinite(Date.parse(value.date)) || new Date(value.date).toISOString().slice(0, 10) !== value.date ||
+    !Array.isArray(value.messages) || value.messages.length < 1 || value.messages.length > MAX_DAILY_MESSAGES) return null
+  const ids = new Set<string>()
+  let chars = 0
+  let hasUser = false
+  for (const item of value.messages) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const message = item as Record<string, unknown>
+    if (!(hasOnlyKeys(message, ['id', 'role', 'text', 'recordedAt']) ||
+      hasOnlyKeys(message, ['id', 'role', 'text', 'recordedAt', 'revised'])) ||
+      typeof message.id !== 'string' || message.id.length < 1 || message.id.length > 128 ||
+      message.id !== message.id.trim() || hasControlCharacter(message.id) || ids.has(message.id) ||
+      typeof message.role !== 'string' || !['user', 'assistant', 'system'].includes(message.role) ||
+      typeof message.text !== 'string' || !message.text.trim() || hasControlCharacter(message.text, true) ||
+      typeof message.recordedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(message.recordedAt) ||
+      !Number.isFinite(Date.parse(message.recordedAt)) ||
+      new Date(message.recordedAt.slice(0, 10)).toISOString().slice(0, 10) !== message.recordedAt.slice(0, 10) ||
+      (Object.hasOwn(message, 'revised') && typeof message.revised !== 'boolean')) return null
+    chars += Array.from(message.text).length
+    if (chars > MAX_DAILY_TEXT_CHARS) return null
+    ids.add(message.id)
+    hasUser ||= message.role === 'user'
+  }
+  return hasUser ? value as unknown as DailyAlbumRequest : null
+}
+
+function validateDailyAlbumOutput(raw: string, request: DailyAlbumRequest): DailyAlbumContent | null {
+  if (raw.length > MAX_MODEL_OUTPUT_CHARS) return null
+  let parsed: unknown
+  try { parsed = JSON.parse(raw) } catch { return null }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const value = parsed as Record<string, unknown>
+  const text = (item: unknown, max: number): item is string => typeof item === 'string' &&
+    item === item.trim() && Array.from(item).length >= 1 && Array.from(item).length <= max &&
+    !hasControlCharacter(item, true) && !/https?:|www\.|```|<\/?\w/i.test(item) &&
+    !makesUnsupportedPersonalClaim(item)
+  if (!hasOnlyKeys(value, ['title', 'diary', 'portrait']) || !text(value.title, 60) ||
+    !text(value.diary, 1000) || !value.portrait || typeof value.portrait !== 'object' ||
+    Array.isArray(value.portrait)) return null
+  const portrait = value.portrait as Record<string, unknown>
+  if (!hasOnlyKeys(portrait, ['facts', 'feelings', 'observations', 'uncertainties'])) return null
+  for (const key of ['facts', 'feelings', 'uncertainties']) {
+    const items = portrait[key]
+    if (!Array.isArray(items) || items.length > 12 || !items.every((item) => text(item, 300))) return null
+  }
+  if (!Array.isArray(portrait.observations) || portrait.observations.length > 12) return null
+  const userIds = new Set(request.messages.filter((message) => message.role === 'user').map((message) => message.id))
+  for (const item of portrait.observations) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+    const observation = item as Record<string, unknown>
+    if (!hasOnlyKeys(observation, ['text', 'evidenceIds']) || !text(observation.text, 300) ||
+      !Array.isArray(observation.evidenceIds) || observation.evidenceIds.length < 1 ||
+      observation.evidenceIds.length > 12 ||
+      !observation.evidenceIds.every((id) => typeof id === 'string' && userIds.has(id)) ||
+      new Set(observation.evidenceIds).size !== observation.evidenceIds.length) return null
+  }
+  return value as unknown as DailyAlbumContent
 }
 
 function isLoopbackHost(host: string | undefined): boolean {
@@ -404,8 +489,9 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     const isModelStatus = request.url === MODEL_STATUS_PATH
     const isPrivate = request.url === PRIVATE_API_PATH
     const isChat = request.url === PRIVATE_CHAT_PATH
-    const kind = isChat ? 'chat' : isPrivate ? 'question' : 'synthetic'
-    if (request.url !== API_PATH && !isPrivate && !isChat && !isModelStatus) {
+    const isAlbum = request.url === DAILY_ALBUM_PATH
+    const kind = isAlbum ? 'album' : isChat ? 'chat' : isPrivate ? 'question' : 'synthetic'
+    if (request.url !== API_PATH && !isPrivate && !isChat && !isAlbum && !isModelStatus) {
       await serveStatic(request, response, options.distDir)
       return
     }
@@ -433,18 +519,19 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     let body: string | null
     try {
       body = await readBoundedBody(request,
-        isChat ? MAX_PRIVATE_CHAT_BODY_BYTES : isPrivate ? MAX_PRIVATE_BODY_BYTES : MAX_BODY_BYTES)
+        isAlbum ? MAX_DAILY_ALBUM_BODY_BYTES : isChat ? MAX_PRIVATE_CHAT_BODY_BYTES : isPrivate ? MAX_PRIVATE_BODY_BYTES : MAX_BODY_BYTES)
     } catch {
       writeError(response, 400, 'invalid_request', kind)
       return
     }
     const privateEntry = isPrivate ? parsePrivateRequest(body) : null
     const chatRequest = isChat ? parsePrivateChatRequest(body) : null
-    if (isChat ? !chatRequest : isPrivate ? !privateEntry : !validRequest(body)) {
+    const albumRequest = isAlbum ? parseDailyAlbumRequest(body) : null
+    if (isAlbum ? !albumRequest : isChat ? !chatRequest : isPrivate ? !privateEntry : !validRequest(body)) {
       writeError(response, 400, 'invalid_request', kind)
       return
     }
-    const model = isChat
+    const model = isAlbum ? (options.privateChatEnabled === true ? options.dailyAlbumProvider : undefined) : isChat
       ? (options.privateChatEnabled === true ? options.privateChatProvider : undefined)
       : isPrivate ? (options.privateAiEnabled === true ? options.privateProvider : undefined)
         : options.provider
@@ -484,7 +571,8 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
     })
     try {
       const raw = await Promise.race([
-        isChat ? options.privateChatProvider!.generate({ request: chatRequest!, signal: controller.signal })
+        isAlbum ? options.dailyAlbumProvider!.generate({ request: albumRequest!, signal: controller.signal })
+          : isChat ? options.privateChatProvider!.generate({ request: chatRequest!, signal: controller.signal })
           : isPrivate ? options.privateProvider!.generate({ entry: privateEntry!, signal: controller.signal })
             : options.provider!.generate({
               scenarioVersion: AHE_SCENARIO_VERSION,
@@ -497,6 +585,18 @@ export function createSyntheticQuestionServer(options: SyntheticQuestionServerOp
       if (response.destroyed) return
       if (typeof raw !== 'string') {
         writeError(response, 502, 'invalid_model_output', kind)
+        return
+      }
+      if (isAlbum) {
+        const result = validateDailyAlbumOutput(raw, albumRequest!)
+        if (!result) {
+          writeError(response, 502, 'invalid_model_output', kind)
+          return
+        }
+        writeJson(response, 200, {
+          status: 'generated', ...result,
+          model: { provider: model.provider, id: model.id }, generatedAt: new Date().toISOString(),
+        } satisfies DailyAlbumResponse)
         return
       }
       if (isChat) {

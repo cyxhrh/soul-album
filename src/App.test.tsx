@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import App from './App'
 
 beforeEach(() => {
+  localStorage.clear()
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => JSON.stringify({
     status: 'unavailable', model: null,
   }) })))
@@ -14,9 +17,9 @@ describe('Soul Album product', () => {
   it('opens directly in the conversation and keeps its three product tabs', async () => {
     render(<App />)
 
-    expect(screen.getByRole('main', { name: '心灵画册产品' })).toBeVisible()
+    expect(screen.getByRole('main', { name: '渐知产品' })).toBeVisible()
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
-    expect(await screen.findByText('今天有什么想记下的？')).toBeVisible()
+    expect(await screen.findByLabelText('小册的开场白')).toBeVisible()
     expect(screen.queryByRole('button', { name: '千问聊天' })).not.toBeInTheDocument()
     const navigation = screen.getByRole('navigation', { name: '产品导航' })
     expect(within(navigation).getAllByRole('button').slice(0, 3).map((button) => button.textContent)).toEqual([
@@ -39,7 +42,7 @@ describe('Soul Album product', () => {
     })
 
     fireEvent.click(screen.getByRole('button', { name: '画册' }))
-    expect(screen.getByRole('article', { name: '第 1 天画册页' })).toHaveTextContent('傍晚散步时看见一朵云。')
+    expect(screen.getByRole('article', { name: /每日画册/ })).toHaveTextContent('傍晚散步时看见一朵云。')
     fireEvent.click(screen.getByRole('button', { name: '对话' }))
     expect(screen.getByRole('textbox', { name: '发送消息' })).toHaveValue('第二句还没写完')
   })
@@ -52,7 +55,8 @@ describe('Soul Album product', () => {
     fireEvent.click(screen.getByRole('button', { name: '对话' }))
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '清除本次内容' }))
-    expect(await screen.findByText('今天有什么想记下的？')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '确认清除本机记录' }))
+    expect(await screen.findByLabelText('小册的开场白')).toBeVisible()
   })
 
   it('shows a short typing state before a local control reply appears', async () => {

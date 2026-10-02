@@ -35,13 +35,13 @@ test('one composer sends three natural turns automatically with bounded context 
   const composer = page.getByRole('textbox', { name: '发送消息' })
   const send = page.getByRole('button', { name: '发送', exact: true })
   await expect(page.locator('[aria-label="模型状态"]')).toContainText('当前模型：fake-qwen（本机已配置）')
-  await expect(chat).toContainText('同日最近最多两条已发给模型的对话文字')
+  await expect(chat.getByLabel('小册的开场白')).toBeVisible()
   await expect(chat.getByRole('button', { name: '千问聊天' })).toHaveCount(0)
 
   await composer.fill('你好')
   await send.click()
   await expect(chat).toContainText('你好，我在。想聊什么都可以。')
-  expect(requests[0]).toEqual({ turn: expect.objectContaining({ quote: '你好' }), context: [] })
+  expect(requests[0]).toEqual({ turn: expect.objectContaining({ quote: '你好' }), context: [], openingId: expect.any(String) })
   await expect(page.getByRole('dialog', { name: '查看这一次发给千问的内容' })).toHaveCount(0)
 
   await page.getByRole('button', { name: '生活数据' }).click()
@@ -65,11 +65,14 @@ test('one composer sends three natural turns automatically with bounded context 
   await expect(chat.locator('.product-ai-reply')).toHaveCount(3)
   await page.screenshot({ path: 'test-results/private-chat-auto-three-turns-375.png' })
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(376)
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.screenshot({ path: 'test-results/private-chat-auto-three-turns-1440.png' })
 
   await page.getByRole('button', { name: '画册' }).click()
-  const album = page.getByRole('article', { name: '第 1 天画册页' })
+  await page.getByRole('button', { name: '记录背面', exact: true }).click()
+  const album = page.locator('.daily-album')
   await expect(album).toContainText('今天走了很远的路。')
-  await expect(album).not.toContainText('听起来你走了不少路。')
+  await expect(album).toContainText('听起来你走了不少路。')
 })
 
 test('offline words are never silently included when the model becomes available on the next send', async ({ page }) => {
@@ -138,7 +141,7 @@ test('a model failure keeps the local words and never fabricates a reply or expo
   await expect(chat.locator('.product-ai-reply')).toHaveCount(0)
   expect(calls).toBe(1)
   await page.getByRole('button', { name: '画册' }).click()
-  await expect(page.getByRole('article', { name: '第 1 天画册页' })).toContainText('这一句先留下。')
+  await expect(page.locator('.daily-album')).toContainText('这一句先留下。')
 })
 
 test('editing a sent source withdraws its reply and later replies that used it', async ({ page }) => {
@@ -190,6 +193,7 @@ test('rapid double-submit sends one request; clearing during a slow reply discar
   await expect(page.getByRole('region', { name: '对话记录' }).locator('.product-bubble-row.user'))
     .toHaveCount(1)
   await page.getByRole('button', { name: '清除本次内容' }).click()
+  await page.getByRole('button', { name: '确认清除本机记录' }).click()
   if (heldRoute) {
     try { await heldRoute.fulfill({ status: 200, contentType: 'application/json',
       body: JSON.stringify(reply('不应出现的迟到回复。')) }) } catch { /* Aborted requests can reject fulfillment. */ }

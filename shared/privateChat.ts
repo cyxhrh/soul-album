@@ -1,3 +1,5 @@
+import type { ChatOpeningId } from './chatOpening.js'
+
 /** The only personal text that one bounded chat request may carry. */
 export interface PrivateChatSource {
   kind: 'entry' | 'correction' | 'control'
@@ -14,6 +16,8 @@ export interface PrivateChatRequest {
   context: PrivateChatSource[]
   /** The last still-valid generated response; never a transcript or full album. */
   precedingAssistant?: { reply: string; nextQuestion: string | null }
+  /** Controlled local greeting shown before this first message; never user-authored text. */
+  openingId?: ChatOpeningId
 }
 
 export interface PrivateChatResponse {

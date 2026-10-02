@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   cadenceForDay, changeCadence, createInvitationState, isInvitationDue,
   markInvitationShown, pauseInvitations, resumeInvitations, settleInvitation,
@@ -13,9 +13,18 @@ import {
   sourceForMessage, sourceIsCurrent, validChatRequest,
   type PrivateChatRequest, type PrivateChatSource, type PrivateChatTurn,
 } from './privateChat'
+import { ChatAvatar, ProductIcon } from './ChatIdentity'
+import { chatOpenings, openingForHour } from '../../../shared/chatOpening'
 import AlbumPage from '../album/AlbumPage'
+import DailyAlbum from '../album/DailyAlbum'
+import { createDailyRecord, type DailyRecord } from '../album/dailyRecord'
+import { collectDailySources, syncDailyRecord } from '../album/dailyArchive'
+import type { DailyMessage } from '../../../shared/dailyAlbum'
+import { loadFreeSession } from './freeSessionCache'
+import { clearSavedSession, saveSession, SESSION_STORAGE_KEY } from './sessionPersistence'
 import DataInsights, { type BehaviorConsents, type BehaviorSource } from '../data/DataInsights'
 import '../../styles/product.css'
+import '../../styles/messenger.css'
 
 const DAYS = [1, 2, 8, 9] as const
 const REPLY_DELAY_MS = 2400
@@ -126,8 +135,35 @@ function AlbumPreviewPage({ album, openingDay, dateForDay, onOpen }: {
   </>
 }
 
+function initializeSession() {
+  const loaded = loadFreeSession()
+  const openingId = loaded.saved?.openingId ?? openingForHour(new Date().getHours())
+  try {
+    return { ...loaded, openingId, session: createBrowserLocalSession({ openingId, restore: loaded.saved?.session }) }
+  } catch {
+    return { saved: null, error: '本机记录暂时无法恢复，原缓存未覆盖。可先下载备份，再清除本机记录。', openingId,
+      session: createBrowserLocalSession({ openingId }) }
+  }
+}
+
+function exampleRecord() {
+  const record = createDailyRecord('2026-09-30', [
+    { id: 'sample-user-1', role: 'user', text: '下午把做了一半的小项目讲给朋友听。原本有点紧张，讲着讲着反而把思路理清了。', recordedAt: '2026-09-30T08:20:00Z' },
+    { id: 'sample-assistant-1', role: 'assistant', text: '把想法说出来，也让你自己看得更清楚了。最想接着做的是哪一部分？', recordedAt: '2026-09-30T08:20:02Z' },
+    { id: 'sample-user-2', role: 'user', text: '先把首页做好吧。回来的路上买了一束花，今天就先到这里。', recordedAt: '2026-09-30T08:22:00Z' },
+  ])
+  return { ...record, title: '说出来，思路就清楚了', diary: '下午，把做了一半的小项目讲给朋友听。开始时有些紧张，讲着讲着，自己的思路也清楚了。\n\n接下来想先把首页做好。回来的路上买了一束花，今天就先到这里。',
+    portrait: { facts: ['向朋友介绍了进行中的项目。', '打算先完善首页，回程买了一束花。'], feelings: ['开始有些紧张，讲述时思路逐渐清晰。'],
+      observations: [{ text: '这一次，向朋友讲述帮助了思路整理。是否适用于其他事情，还不确定。', evidenceIds: ['sample-user-1'] }], uncertainties: ['一次经历不足以判断长期偏好或性格。'] } }
+}
+
 function FreeSession({ onReset }: { onReset: () => void }) {
-  const [session] = useState(() => createBrowserLocalSession())
+  const [initial] = useState(initializeSession)
+  const restored = initial.saved
+  const [openingId] = useState(initial.openingId)
+  const opening = chatOpenings[openingId]
+  const [openingDismissed, setOpeningDismissed] = useState(restored?.openingDismissed ?? false)
+  const [session] = useState(initial.session)
   const [snapshot, setSnapshot] = useState(() => session.read())
   const journal = session.projectJournal(snapshot)
   const [activeTab, setActiveTab] = useState<ProductTab>('chat')
@@ -135,21 +171,26 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     state: privateChatAvailableOnThisHost(window.location.hostname) ? 'checking' : 'offline',
     modelName: null,
   }))
-  const [chatTurns, setChatTurns] = useState<PrivateChatTurn[]>([])
+  const [chatTurns, setChatTurns] = useState<PrivateChatTurn[]>(restored?.chatTurns ?? [])
   const [chatRequestPending, setChatRequestPending] = useState(false)
   const [chatError, setChatError] = useState('')
-  const [controlExchanges, setControlExchanges] = useState<ControlExchange[]>([])
+  const [controlExchanges, setControlExchanges] = useState<ControlExchange[]>(restored?.controlExchanges ?? [])
   const [consents, setConsents] = useState<BehaviorConsents>({ steps: false, spending: false, screenTime: false })
-  const [invitation, setInvitation] = useState(() => markInvitationShown(createInvitationState(), 1))
-  const [day, setDay] = useState(1)
-  const [viewedDay, setViewedDay] = useState(1)
+  const [invitation, setInvitation] = useState(() => restored?.invitation ?? markInvitationShown(createInvitationState(), 1))
+  const [day, setDay] = useState(restored?.day ?? 1)
+  const [viewedDay, setViewedDay] = useState(restored?.viewedDay ?? 1)
   const [bookTurn, setBookTurn] = useState<BookTurn | null>(null)
-  const [questionIndex, setQuestionIndex] = useState(0)
-  const [answeredInRound, setAnsweredInRound] = useState(false)
-  const [extraQuestion, setExtraQuestion] = useState(false)
-  const [thirdUsed, setThirdUsed] = useState(false)
-  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(session.firstQuestionId)
-  const [draft, setDraft] = useState('')
+  const [questionIndex, setQuestionIndex] = useState(restored?.questionIndex ?? 0)
+  const [answeredInRound, setAnsweredInRound] = useState(restored?.answeredInRound ?? false)
+  const [extraQuestion, setExtraQuestion] = useState(restored?.extraQuestion ?? false)
+  const [thirdUsed, setThirdUsed] = useState(restored?.thirdUsed ?? false)
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(restored ? restored.activeQuestionId : session.firstQuestionId)
+  const [draft, setDraft] = useState(restored?.draft ?? '')
+  const [dailyRecords, setDailyRecords] = useState<Record<string, DailyRecord>>(restored?.dailyRecords ?? {})
+  const [dailySources, setDailySources] = useState<Record<string, DailyMessage[]>>(restored?.dailySources ?? {})
+  const [sample, setSample] = useState(exampleRecord)
+  const [storageError, setStorageError] = useState(initial.error ?? '')
+  const [albumEditing, setAlbumEditing] = useState(false)
   const [voiceState, setVoiceState] = useState<'idle' | 'requesting' | 'recording' | 'transcribing' | 'failure'>('idle')
   const [voiceMessage, setVoiceMessage] = useState('')
   const [recordingSeconds, setRecordingSeconds] = useState(0)
@@ -158,7 +199,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [editDraft, setEditDraft] = useState('')
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const [choice, setChoice] = useState<Cadence>('daily')
+  const [choice, setChoice] = useState<Cadence>(restored?.choice ?? 'daily')
   const [status, setStatus] = useState('')
   const [printPending, setPrintPending] = useState(false)
   const [pendingEntryChange, setPendingEntryChange] = useState<EntryChange | null>(null)
@@ -199,6 +240,50 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const focusDraftAfterVoiceRef = useRef(false)
   const voiceDisposedRef = useRef(false)
 
+  const sourceByDate = useMemo(() => {
+    return collectDailySources(snapshot, chatTurns, openingId, session.firstQuestionId, controlExchanges)
+  }, [snapshot, chatTurns, openingId, session, controlExchanges])
+
+  useEffect(() => {
+    setDailyRecords((current) => {
+      const next = Object.fromEntries(Object.entries(sourceByDate).map(([date, messages]) =>
+        [date, syncDailyRecord(current[date], dailySources[date], messages, date)]))
+      return Object.keys(current).length === Object.keys(next).length &&
+        Object.keys(next).every((date) => current[date] === next[date]) ? current : next
+    })
+    setDailySources(sourceByDate)
+  }, [sourceByDate])
+
+  useEffect(() => {
+    if (initial.error) return
+    try {
+      saveSession({ session: session.exportState(), openingId, openingDismissed,
+        chatTurns: currentChatTurns(snapshot, chatTurns), controlExchanges, invitation, day, viewedDay,
+        questionIndex, answeredInRound, extraQuestion, thirdUsed, activeQuestionId, draft, choice,
+        dailyRecords, dailySources })
+      setStorageError('')
+    } catch (error) { setStorageError(error instanceof Error ? error.message : '本机保存失败，请先下载记录。') }
+  }, [snapshot, session, openingId, openingDismissed, chatTurns, controlExchanges, invitation, day,
+    viewedDay, questionIndex, answeredInRound, extraQuestion, thirdUsed, activeQuestionId, draft,
+    choice, dailyRecords, dailySources, initial.error])
+
+  function saveDailyRecord(record: DailyRecord) {
+    setDailyRecords((current) => ({ ...current, [record.date]: record }))
+  }
+
+  function downloadCacheBackup() {
+    try {
+      const raw = localStorage.getItem(SESSION_STORAGE_KEY)
+      if (!raw) throw new Error('当前没有可读取的本机缓存，请从画册背面下载本页记录。')
+      const url = URL.createObjectURL(new Blob([raw], { type: 'application/json;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = '渐知-本机缓存备份.json'
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (cause) { setStorageError(cause instanceof Error ? cause.message : '无法读取缓存，请下载当前画册。') }
+  }
+
   useEffect(() => () => {
     sendGenerationRef.current += 1
     sendLockRef.current = false
@@ -237,6 +322,38 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }, [])
 
   useLayoutEffect(() => { activeTabRef.current = activeTab }, [activeTab])
+
+  useLayoutEffect(() => {
+    const input = messageInputRef.current
+    if (!input || activeTab !== 'chat' || voiceState !== 'idle') return
+    const resize = () => {
+      input.style.height = 'auto'
+      input.style.height = `${Math.min(input.scrollHeight, 144)}px`
+    }
+    resize()
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [draft, activeTab, voiceState])
+
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const settings = settingsRef.current
+      if (settings?.open && event.target instanceof Node && !settings.contains(event.target)) settings.open = false
+    }
+    const escape = (event: KeyboardEvent) => {
+      const settings = settingsRef.current
+      if (event.key === 'Escape' && settings?.open) {
+        settings.open = false
+        settings.querySelector('summary')?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [])
 
   useLayoutEffect(() => {
     if (voiceState === 'failure') voiceRetryRef.current?.focus()
@@ -617,14 +734,13 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     observation.revision === activeObservationCitation.revision)
   const activeSourcePreview = entrySourcePreview(activeEntryCitation?.id, activeEntryCitation?.revision) ??
     (activeObservation ? `依据你的纠正 · 「${Array.from(activeObservation.text).slice(0, 28).join('')}」` : null)
-  const recordedDays = [...new Set([
-    ...journal.entries.map((entry) => entry.day),
-    ...journal.observations.filter((observation) => observation.status === 'corrected')
-      .map((observation) => observation.day),
-  ])]
+  const recordedDays = Object.keys(sourceByDate).map(date => session.dayForDate(date))
     .sort((first, second) => first - second)
   const albumDay = recordedDays.includes(viewedDay) ? viewedDay : recordedDays.at(-1) ?? day
-  const album = selectAlbum(journal, albumDay)
+  const album = selectAlbum(journal, albumDay) ?? (recordedDays.includes(albumDay) ? {
+    spaceId: journal.spaceId, day: albumDay, title: '今天留下的事', titleRevision: 0,
+    entries: [], sources: [], observations: [], observation: null,
+  } : null)
   const selectedDayIndex = recordedDays.indexOf(albumDay)
   const previousAlbumDay = selectedDayIndex > 0 ? recordedDays[selectedDayIndex - 1] : null
   const nextAlbumDay = selectedDayIndex >= 0 && selectedDayIndex < recordedDays.length - 1
@@ -719,6 +835,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     }).at(-1)
     const request: PrivateChatRequest = {
       turn, context,
+      ...(!preceding && !openingDismissed && !invitation.paused && messageDay === 1 &&
+        messages[0]?.id === messageId ? { openingId } : {}),
       ...(preceding ? { precedingAssistant: {
         reply: preceding.response.reply, nextQuestion: preceding.response.nextQuestion,
       } } : {}),
@@ -846,6 +964,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   function viewRecordedDay(target: number) {
+    if (albumEditing && target !== albumDay) { setStatus('画册正在编辑，请先保存、取消或下载草稿，再切换日期。'); return }
     if (bookTurnTimerRef.current !== null) {
       window.clearTimeout(bookTurnTimerRef.current)
       bookTurnTimerRef.current = null
@@ -863,6 +982,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   function turnAlbum(direction: 'next' | 'previous') {
+    if (albumEditing) { setStatus('请先保存、取消或下载编辑草稿，再翻到其他日期。'); return }
     if (bookTurn || selectedDayIndex < 0) return
     const targetDay = recordedDays[selectedDayIndex + (direction === 'next' ? 1 : -1)]
     if (targetDay === undefined) return
@@ -882,6 +1002,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   function advanceDay(target: number) {
+    if (albumEditing) { setStatus('请先保存或取消画册编辑，再推进演示日期。'); return }
     if (target <= day) return
     if (settingsRef.current?.open) {
       settingsRef.current.open = false
@@ -1011,6 +1132,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   function applyEntryChange(change: EntryChange) {
+    if (albumEditing && change.kind === 'deleteEntry') {
+      setPendingEntryChange(null)
+      setStatus('请先保存或取消画册编辑，再删除原话，避免丢失编辑草稿。')
+      return
+    }
     const affectedTitleDays = titleDaysAffectedByEntryChange(journal, change.id, change.kind)
     if (affectedTitleDays.length !== change.affectedTitleDays.length ||
       affectedTitleDays.some((target, index) => target !== change.affectedTitleDays[index])) {
@@ -1093,8 +1219,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       kind: 'deleteEntry', id,
       affectedTitleDays: titleDaysAffectedByEntryChange(journal, id, 'deleteEntry'),
     }
-    if (change.affectedTitleDays.length > 0) showTitleConfirmation(change)
-    else applyEntryChange(change)
+    showTitleConfirmation(change)
   }
 
   function applyCadence() {
@@ -1109,6 +1234,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       setStatus(nextDueDay(next, day) === null ? '邀请已恢复；目前只在你主动分享时记录。' :
         `邀请已恢复；下次邀请在第 ${nextDueDay(next, day)} 天。`)
     } else {
+      if (session.read().messages.length === 0) setOpeningDismissed(true)
       setInvitation(pauseInvitations(invitation))
       setExtraQuestion(false)
       setStatus('邀请已暂停；暂停期间不会补发。')
@@ -1125,14 +1251,17 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   return (
-    <main className={'product-shell product-tab-' + activeTab} aria-label="心灵画册产品">
+    <main className={'product-shell product-tab-' + activeTab} aria-label="渐知产品">
       <nav className="product-nav screen-only" aria-label="产品导航">
-        <div className="product-brand"><span className="product-brand-mark" aria-hidden="true">●</span>
-          <strong>心灵画册</strong><small>把日子慢慢装订起来</small></div>
+        <div className="product-brand"><span className="product-brand-mark"><ProductIcon name="album" /></span>
+          <strong>渐知</strong><small>慢慢认识你</small></div>
         <div className="product-nav-links">
-          <button type="button" aria-current={activeTab === 'chat' ? 'page' : undefined} onClick={() => setActiveTab('chat')}>对话</button>
-          <button type="button" aria-current={activeTab === 'album' ? 'page' : undefined} onClick={() => setActiveTab('album')}>画册</button>
-          <button type="button" aria-current={activeTab === 'data' ? 'page' : undefined} onClick={() => setActiveTab('data')}>生活数据</button>
+          <button type="button" aria-current={activeTab === 'chat' ? 'page' : undefined} onClick={() => setActiveTab('chat')}><ProductIcon name="chat" /><span>对话</span></button>
+          <button type="button" aria-current={activeTab === 'album' ? 'page' : undefined} onClick={() => setActiveTab('album')}><ProductIcon name="album" /><span>画册</span></button>
+          <button type="button" aria-current={activeTab === 'data' ? 'page' : undefined} onClick={() => setActiveTab('data')}><ProductIcon name="data" /><span>生活数据</span></button>
+        </div>
+        <div className="messenger-contact-preview" hidden={activeTab !== 'chat'}>
+          <ChatAvatar /><div><strong>小册</strong><p>想说时，就在这里。</p></div>
         </div>
         <div className="product-nav-foot">
           <button type="button" className="product-clear" onClick={onReset} aria-label="清除本次内容">清除</button>
@@ -1141,16 +1270,41 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         </div>
       </nav>
       <div className="product-workspace">
-        {activeTab !== 'data' && <h1 className="product-sr-title">{activeTab === 'chat' ? '聊聊今天' : '翻开画册'}</h1>}
+        {activeTab === 'album' && <h1 className="product-sr-title">翻开画册</h1>}
+        {storageError && <div className="storage-warning screen-only" role="alert"><p>{storageError} 当前修改尚未可靠保存，请在画册背面下载 .md。</p><button type="button" onClick={downloadCacheBackup}>下载原缓存备份</button></div>}
         {status && <p ref={statusRef} className="free-status product-status screen-only" role="status" tabIndex={-1}>{status}</p>}
         <div className="product-content">
           <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat'}>
-            <div className="product-chat-modes" aria-label="模型状态" aria-live="polite">
-              <span>{modelConnection.state === 'checking' ? '正在检查本机模型…' :
-                modelConnection.state === 'ready' ? `当前模型：${modelConnection.modelName}（本机已配置）` :
-                  modelConnection.modelName ? `当前模型：${modelConnection.modelName}（暂不可用）` :
-                    '模型未连接 · 本地记录'}</span>
-            </div>
+            <header className="messenger-header">
+              <div className="messenger-contact"><ChatAvatar /><div><h1>小册</h1><p>AI 记录伙伴</p></div></div>
+              <div className="messenger-header-actions">
+                {modelConnection.state === 'offline' && <span className="messenger-offline">暂时离线 · 仍可记录</span>}
+                <details className="product-settings" ref={settingsRef}><summary aria-label="邀请节奏与演示日期" title="聊天设置">邀请节奏与演示日期<ProductIcon name="more" /></summary>
+                  <div className="messenger-settings-panel"><h2>聊天设置</h2>
+                <div className="messenger-model-status" aria-label="模型状态" aria-live="polite">
+                  <span>{modelConnection.state === 'checking' ? '正在检查本机模型…' :
+                    modelConnection.state === 'ready' ? `当前模型：${modelConnection.modelName}（本机已配置）` :
+                      modelConnection.modelName ? `当前模型：${modelConnection.modelName}（暂不可用）` :
+                        '模型未连接 · 本地记录'}</span>
+                </div>
+                  <p>连续两次实际展示的整轮都没有回答，只会降低邀请频率。历史回看不计入。</p>
+                  <div className="product-settings-actions">
+                    <label htmlFor="free-cadence">手动调整节奏</label>
+                    <select id="free-cadence" value={choice} onChange={(event) => setChoice(event.target.value as Cadence)}>
+                      <option value="daily">每日两问</option><option value="weekly">每周一问</option><option value="manual">仅我主动</option>
+                    </select>
+                    <button type="button" onClick={applyCadence}>应用节奏</button>
+                    <button type="button" onClick={togglePause}>{invitation.paused ? '恢复邀请' : '暂停邀请'}</button>
+                  </div>
+                  <div className="product-advance"><span>显式推进演示日</span>
+                    {navigationDays.map((target) => <button type="button" key={target}
+                      onClick={() => advanceDay(target)}>推进到第 {target} 天</button>)}
+                  </div>
+                  {dynamicNextDay && <p>下次邀请在第 {nextDay} 天；中间日期不会补发。</p>}
+                  </div>
+                </details>
+              </div>
+            </header>
             <div className="product-chat-scroll" ref={chatScrollRef}>
               {conversationDays.map(({ day: conversationDay, items }) => <section className="product-chat-day"
                 aria-label={'第 ' + conversationDay + ' 天对话'} key={conversationDay}>
@@ -1158,27 +1312,29 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 {items[0] ? chatLocalDateTime(items[0].sentAt, session.timezone).detailed : session.dateForDay(conversationDay)}
                 {conversationDay > 1 && <small>演示第 {conversationDay} 天</small>}</span></p>
               <div className="product-thread">
+                {conversationDay === 1 && !openingDismissed && <div className="product-bubble-row agent messenger-opening"
+                  aria-label="小册的开场白">
+                  <ChatAvatar />
+                  <div className="product-bubble"><p>{opening.greeting}</p><p>{opening.question}</p></div>
+                </div>}
                 {items.map((item, index) => {
                   const marker = chatTimeMarker(items[index - 1], item, session.timezone)
                   if (item.kind === 'control') return <div className="product-exchange" key={item.messageId}>
                     {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
-                    {item.exchange?.promptQuestionId && <div className="product-bubble-row agent">
-                      <span className="product-avatar" aria-hidden="true">画</span>
-                      <div className="product-bubble"><small>心灵画册 · 当时的问题</small>
+                    {item.exchange?.promptQuestionId && (openingDismissed || item.exchange.promptQuestionId !== session.firstQuestionId) && <div className="product-bubble-row agent">
+                      <ChatAvatar />
+                      <div className="product-bubble"><small>渐知 · 当时的问题</small>
                         <p>{snapshot.questions.find((question) => question.id === item.exchange?.promptQuestionId)?.text ?? '旧提问已撤下。'}</p></div>
                     </div>}
-                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p>
-                      <time dateTime={item.sentAt}>{chatLocalDateTime(item.sentAt, session.timezone).clock}</time></div></div>
-                    {item.exchange?.reply && typingMessageId !== item.messageId && <div className="product-bubble-row agent"><span className="product-avatar" aria-hidden="true">画</span>
+                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p></div><ChatAvatar user /></div>
+                    {item.exchange?.reply && typingMessageId !== item.messageId && <div className="product-bubble-row agent"><ChatAvatar />
                       <div className="product-bubble"><p>{item.exchange.reply}</p></div></div>}
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
-                      <span className="product-avatar" aria-hidden="true">画</span>
+                      <ChatAvatar />
                       <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
                           <p className="product-ai-followup">{chatTurnByMessageId.get(item.messageId)!.response.nextQuestion}</p>}
-                        <details className="product-question-evidence"><summary>查看当时发送的内容</summary>
-                          <pre>{JSON.stringify(chatTurnByMessageId.get(item.messageId)!.request, null, 2)}</pre></details>
                       </div></div>}
                   </div>
                   const entry = item.entry
@@ -1189,9 +1345,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   const isProactive = entry.topicId.startsWith('proactive-day-')
                   return <div className="product-exchange" key={entry.id}>
                     {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
-                    {answered && !isProactive && <div className="product-bubble-row agent">
-                      <span className="product-avatar" aria-hidden="true">画</span>
-                      <div className="product-bubble"><small>心灵画册 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
+                    {answered && !isProactive && (openingDismissed || snapshot.questions.find((question) =>
+                      question.id === session.firstQuestionId)?.answeredByMessageId !== item.messageId) && <div className="product-bubble-row agent">
+                      <ChatAvatar />
+                      <div className="product-bubble"><small>渐知 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
                         <p>{answered.status === 'ready' ? answered.text :
                           answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
                         {answeredSourcePreview && <small className="product-question-source">{answeredSourcePreview}</small>}
@@ -1201,27 +1358,26 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble">
                       <p>{entry.text}</p>
-                      <time dateTime={item.sentAt}>{chatLocalDateTime(item.sentAt, session.timezone).clock}{entry.revision > 1 && ' · 已修订'}</time>
-                    </div></div>
+                      {entry.revision > 1 && <span className="messenger-revision">已修订</span>}
+                    </div><ChatAvatar user /></div>
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
-                      <span className="product-avatar" aria-hidden="true">画</span>
+                      <ChatAvatar />
                       <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
                           <p className="product-ai-followup">{chatTurnByMessageId.get(item.messageId)!.response.nextQuestion}</p>}
-                        <details className="product-question-evidence"><summary>查看当时发送的内容</summary>
-                          <pre>{JSON.stringify(chatTurnByMessageId.get(item.messageId)!.request, null, 2)}</pre></details>
                       </div></div>}
                   </div>
                 })}
                 {journal.observations.filter((observation) => observation.day === conversationDay &&
                   observation.status === 'corrected').map((correction) => <div className="product-bubble-row user"
                   aria-label="你补充的纠正" key={correction.id}>
-                  <div className="product-bubble"><small>你补充的准确背景 · 仅留本页</small><p>{correction.text}</p></div>
+                  <div className="product-bubble"><small>你补充的准确背景 · 仅留本页</small><p>{correction.text}</p></div><ChatAvatar user />
                 </div>)}
                 {conversationDay === day && modelConnection.state === 'offline' && !chatError &&
-                  !typingMessageId && (due || extraQuestion) && <div className="product-bubble-row agent current">
-                  <span className="product-avatar" aria-hidden="true">画</span>
+                  !typingMessageId && (due || extraQuestion) &&
+                  (openingDismissed || activeQuestionId !== session.firstQuestionId) && <div className="product-bubble-row agent current">
+                  <ChatAvatar />
                   <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'} · {activeQuestionMode}</small>
                     <p>{visibleQuestionText}</p>
                     {activeSourcePreview && <small className="product-question-source">{activeSourcePreview}</small>}
@@ -1245,13 +1401,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     '未展示的日期不会补发问题；想记事时仍可直接留言。'}</p>
                   {!roundClosed && cadence === 'weekly' && nextDay !== null && <p className="product-next-hint">下次邀请在第 {nextDay} 天</p>}
                 </div>}
-                {conversationDay === day && items.length === 0 && <div className="product-rest" role="note">
-                  <strong>想说什么，直接写在下面</strong>
-                  <p>本机模型已配置时，发送本句前 800 字、同日最近最多两条已发给模型的对话文字与上一条有效回复；不补发离线记录或生活数据。服务方可能按其政策保存调用内容。</p>
-                </div>}
                 {conversationDay === day && chatError && <div className="product-rest" role="alert"><p>{chatError}</p></div>}
                 {conversationDay === day && typingMessageId && <div className="product-bubble-row agent product-typing" aria-live="polite">
-                  <span className="product-avatar" aria-hidden="true">画</span>
+                  <ChatAvatar />
                   <div className="product-bubble"><span>画册正在输入</span>
                     <span className="product-typing-dots" aria-hidden="true"><i /><i /><i /></span></div>
                 </div>}
@@ -1259,7 +1411,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               </section>)}
             </div>
             <div className="product-chat-controls">
-              <div className="product-composer">
+              <div className="product-composer" data-voice-state={voiceState}>
                 <div className="product-composer-input" aria-busy={voiceState === 'transcribing'}>
                   {voiceState === 'idle' ? <>
                     <label htmlFor="free-message">发送消息</label>
@@ -1269,7 +1421,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                         if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                           event.preventDefault(); void sendMessage()
                         }
-                      }} rows={2} placeholder="想说什么，直接写在这里…" />
+                      }} rows={1} placeholder="想说什么，慢慢说…" />
                   </> : voiceState === 'recording' ? <div className="product-voice-panel">
                     <div className="product-wave" aria-hidden="true"><canvas ref={voiceCanvasRef} />
                       <span className="product-wave-still" /></div>
@@ -1292,22 +1444,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   </div>}
                 </div>
                 <div className="product-composer-toolbar">
-                  <details className="product-settings" ref={settingsRef}><summary>邀请节奏与演示日期</summary>
-                    <p>连续两次实际展示的整轮都没有回答，只会降低邀请频率。历史回看不计入。</p>
-                    <div className="product-settings-actions">
-                      <label htmlFor="free-cadence">手动调整节奏</label>
-                      <select id="free-cadence" value={choice} onChange={(event) => setChoice(event.target.value as Cadence)}>
-                        <option value="daily">每日两问</option><option value="weekly">每周一问</option><option value="manual">仅我主动</option>
-                      </select>
-                      <button type="button" onClick={applyCadence}>应用节奏</button>
-                      <button type="button" onClick={togglePause}>{invitation.paused ? '恢复邀请' : '暂停邀请'}</button>
-                    </div>
-                    <div className="product-advance"><span>显式推进演示日</span>
-                      {navigationDays.map((target) => <button type="button" key={target}
-                        onClick={() => advanceDay(target)}>推进到第 {target} 天</button>)}
-                    </div>
-                    {dynamicNextDay && <p>下次邀请在第 {nextDay} 天；中间日期不会补发。</p>}
-                  </details>
                   <div className="product-composer-actions">
                   <button type="button" className="product-voice" ref={voiceButtonRef}
                     onClick={() => void toggleVoiceRecording()}
@@ -1323,10 +1459,14 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                         <path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8" />
                       </svg>}
                   </button>
-                  <button type="button" className="product-send" onClick={() => void sendMessage()}
+                  <button type="button" className="product-send" onClick={() => {
+                    void sendMessage(); messageInputRef.current?.focus()
+                  }}
                     disabled={!draft.trim() || chatRequestPending || !!typingMessageId || voiceState !== 'idle'}>发送</button>
                   </div>
                 </div>
+                <p className="messenger-input-hint">{storageError ? '本机保存遇到问题，请下载备份。' : '已保存在此浏览器 · 发送范围见「详情」。'}<span>Enter 发送 · Shift + Enter 换行</span></p>
+                {recordedDays.length > 0 && <button type="button" className="messenger-open-page" onClick={() => { setViewedDay(day); setActiveTab('album') }}>看看今天这一页 <span aria-hidden="true">→</span></button>}
                 {voiceMessage && <p className="product-composer-note" role="status" aria-live="polite">{voiceMessage}</p>}
               </div>
             </div>
@@ -1342,7 +1482,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   aria-label={'查看第 ' + target + ' 天'} aria-current={albumDay === target ? 'date' : undefined}
                   onClick={() => viewRecordedDay(target)}>
                   <strong>{session.dateForDay(target).slice(5).replace('-', '.')}</strong>
-                  <small>第 {target} 天 · {dayAlbum?.entries.length} 条原话
+                  <small>第 {target} 天 · {sourceByDate[session.dateForDay(target)]?.filter(message => message.role === 'user').length ?? 0} 段话
                     {correctionCount > 0 && ` · ${correctionCount} 条纠正`}</small></button>
                 })}
               </nav>
@@ -1360,9 +1500,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       dateForDay={(target) => session.dateForDay(target)} onOpen={viewRecordedDay} />
                   </section>
                   <div className="album-book-page album-book-page-right">
-                    <AlbumPage mode="private" key={bookBaseAlbum?.day ?? albumDay} album={bookBaseAlbum ?? album}
-                      journal={journal} dateForDay={(target) => '第 ' + target + ' 天'}
-                      displayDateForDay={(target) => `演示日期 ${session.dateForDay(target)} · 第 ${target} 天`} />
+                    <DailyAlbum key={bookBaseAlbum?.day ?? albumDay}
+                      record={dailyRecords[session.dateForDay(bookBaseAlbum?.day ?? albumDay)] ?? createDailyRecord(session.dateForDay(bookBaseAlbum?.day ?? albumDay), sourceByDate[session.dateForDay(bookBaseAlbum?.day ?? albumDay)] ?? [])}
+                      onSave={saveDailyRecord} onEditingChange={setAlbumEditing} timezone={snapshot.timezone} modelReady={modelConnection.state === 'ready'} />
                   </div>
                   {bookTurn && bookTurnTarget && <div className={`album-turn-sheet album-turn-${bookTurn.direction}`}
                     aria-hidden="true" inert onAnimationEnd={completeBookTurn}>
@@ -1392,6 +1532,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               </div>
               <details className="product-album-foldout product-album-tools screen-only">
                 <summary><span>页面工具</span><small>3 项 · 整理、对照与提问</small></summary>
+              <details className="daily-legacy-evidence"><summary>原话与观察依据</summary>
+                <AlbumPage mode="private" album={album} journal={journal} dateForDay={(target) => '第 ' + target + ' 天'}
+                  displayDateForDay={(target) => session.dateForDay(target)} />
+              </details>
               <section className="free-record-tools product-record-tools" aria-label="记录管理">
                 <h2>管理这一天</h2>
                 <div className="free-title-tools">
@@ -1463,10 +1607,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               </li>)}</ol> : <p>这一天没有已回答的问题。</p>}
             </section>
               </details>
-            </> : <div className="product-album-empty screen-only" role="status">
-              <span aria-hidden="true">○</span><h2>画册还没有第一页</h2>
-              <p>回到对话，回答一个问题或主动留下一句，这里就会出现你的日页。</p>
+            </> : <div className="product-album-empty screen-only">
+              <p className="album-empty-eyebrow">渐知 · 你的生活画册</p><h2>日子，值得慢慢翻阅。</h2>
+              <p>聊一句，留下你的第一页。正面回看生活，背面保留完整记录。</p>
               <button type="button" onClick={() => setActiveTab('chat')}>去对话</button>
+              <div className="album-sample-preview"><DailyAlbum record={sample} onSave={setSample} modelReady={false} sample /></div>
+              <button type="button" className="album-reset-sample" onClick={() => setSample(exampleRecord())}>重置这份示例</button>
             </div>}
           </section>
 
@@ -1482,9 +1628,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         <h2 id="product-details-title">详情</h2>
         <dl>
           <div><dt>目前怎样回应你</dt><dd>本机模型服务已配置时直接请求当前模型；未连接时使用本地规则。模型请求失败只保留原话，不补造回复，也不自动重试。</dd></div>
-          <div><dt>内容保存在哪里</dt><dd>原话和画册只保留在本次页面，刷新或点「清除」后消失。模型回复不写成你的日记事实。</dd></div>
+          <div><dt>内容保存在哪里</dt><dd>聊天、草稿和每日画册保存在此浏览器，刷新后可恢复；没有跨设备同步，也未自动写入电脑文件夹。可在画册背面下载 .md。清除会删除本机保存的记录，已下载文件需自行管理。模型回答和用户原话分别标记。</dd></div>
           <div><dt>语音与生活数据</dt><dd>允许麦克风后，语音在浏览器内转成可修改的文字，不会自动发送；生活数据是模拟资料，尚未连接手机或手表。</dd></div>
-          <div><dt>模型发送范围</dt><dd>每次仅发送本句前 800 字、同日最近最多两条已发送且仍有效的对话文字，以及上一条有效模型回复。不会自动补发离线时期的记录、整本画册或设备数据。本机服务会将这些文字转给阿里云百炼／千问；服务方可能按其政策保存调用内容。</dd></div>
+          <div><dt>模型发送范围</dt><dd>每次仅发送本句前 800 字、同日最近最多两条已发送且仍有效的对话文字，以及上一条有效模型回复。首次回答还会附上本页展示的固定开场白，帮助理解你的回答。不会自动补发离线时期的记录、整本画册或设备数据。本机服务会将这些文字转给阿里云百炼／千问；服务方可能按其政策保存调用内容。</dd></div>
+          <div><dt>每日画册整理</dt><dd>点击「整理今天」会将该日完整有效对话（包括档案中的用户修订）发送给当前模型，生成日记与暂定今日肖像。超过 30,000 字或 200 条时明确拒绝，不截断。翻面、编辑和下载不调用模型。普通聊天尚未自动读取每日档案或跨日记忆。</dd></div>
         </dl>
         <button type="button" className="product-details-close" onClick={closeDetails}>知道了</button>
       </dialog>
@@ -1501,7 +1648,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       {pendingEntryChange && <dialog ref={titleConfirmRef} className="free-print-dialog free-title-dialog screen-only"
         role="dialog" aria-modal="true" aria-labelledby="free-title-confirm-title"
         onCancel={(event) => { event.preventDefault(); closeTitleConfirmation() }}>
-        <p className="guided-section-index">记录修改确认</p><h2 id="free-title-confirm-title">确认撤下日页标题</h2>
+        <p className="guided-section-index">记录修改确认</p><h2 id="free-title-confirm-title">{pendingEntryChange.kind === 'deleteEntry' && !pendingEntryChange.affectedTitleDays.length ? '确认删除这条原话' : '确认撤下日页标题'}</h2>
+        <p>{pendingEntryChange.kind === 'deleteEntry'
+          ? '删除会同时撤下依赖它的模型回应、当天日记与今日肖像，避免已删除的内容留在摘要中。其他原话的档案修订会保留。已下载的文件需自行处理。'
+          : '旧模型回应与今日肖像会撤下；你手写的日记保留，请核对内容是否需要更新。'}</p>
         {pendingEntryChange.preflightUpdated && <p>关联标题已变化，请按更新后的清单重新确认。</p>}
         {pendingEntryChange.affectedTitleDays.length > 0 ?
           <p>{pendingEntryChange.kind === 'editEntry' ? '修改' : '删除'}这条原话会撤下
@@ -1522,5 +1672,17 @@ function FreeSession({ onReset }: { onReset: () => void }) {
 
 export default function FreeTrial() {
   const [session, setSession] = useState(0)
-  return <FreeSession key={session} onReset={() => setSession((value) => value + 1)} />
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState('')
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => { if (confirming) dialog.current?.showModal() }, [confirming])
+  return <><FreeSession key={session} onReset={() => { setError(''); setConfirming(true) }} />
+    {confirming && <dialog ref={dialog} className="free-print-dialog clear-records-dialog" onCancel={() => setConfirming(false)} aria-labelledby="clear-records-title">
+      <h2 id="clear-records-title">清除本机记录？</h2><p>将清除聊天、草稿及每日画册。此操作无法撤回，建议先下载需要保留的 .md 文件。</p>
+      {error && <p role="alert">{error}</p>}<div className="daily-actions"><button type="button" autoFocus onClick={() => setConfirming(false)}>保留记录</button><button type="button" onClick={() => {
+        try { clearSavedSession(); setConfirming(false); setSession((value) => value + 1) }
+        catch (cause) { setError(cause instanceof Error ? cause.message : '清除失败，记录仍保留。') }
+      }}>确认清除本机记录</button></div>
+    </dialog>}
+  </>
 }

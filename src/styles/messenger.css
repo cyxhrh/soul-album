@@ -1,0 +1,137 @@
+/* Messenger presentation layered over the integrated teammate UI.
+   Album, data, voice and backend state continue to use their existing contracts. */
+.product-shell {
+  --bg: #f7f8f4;
+  --surface: #ffffff;
+  --text: #26332b;
+  --muted: #687468;
+  --border: #dfe4da;
+  --accent: #47765b;
+  --accent-soft: #e9f0e4;
+  --on-accent: #ffffff;
+  --chat-bg: #f1f2ef;
+  --chat-green: #c8e2af;
+  --chat-ink: #26332b;
+  --chat-muted: #687467;
+  --chat-action: #477955;
+}
+.product-brand { grid-template-columns: 26px 1fr; column-gap: 10px; }
+.product-brand-mark { grid-row: span 2; display: grid; place-items: center; }
+.product-brand strong { font-size: 18px; }
+.product-nav-links button { display: flex; align-items: center; gap: 13px; }
+.product-nav-links button[aria-current="page"]::before { display: none; }
+.messenger-contact-preview { display: none; }
+.messenger-contact-preview strong { font-size: 14px; font-weight: 500; }
+.messenger-contact-preview p { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+.product-shell .product-avatar { display: grid; flex: 0 0 40px; place-items: center; width: 40px; height: 40px; overflow: hidden; border-radius: 7px; background: #dce7da; }
+.product-avatar svg { width: 100%; height: 100%; }
+.product-shell .product-avatar-self { background: #dfd7c8; color: #786e5c; font-family: var(--serif); font-size: 17px; }
+.product-shell .product-chat { width: 100%; max-width: none; min-width: 0; background: var(--chat-bg); }
+.messenger-header { position: relative; z-index: 3; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 88px; padding: 18px clamp(24px, 4vw, 54px); border-bottom: 1px solid #dedfd8; }
+.messenger-contact { display: flex; align-items: center; gap: 12px; flex: none; }
+.messenger-contact h1 { margin: 0; color: var(--chat-ink); font-size: 19px; font-weight: 600; letter-spacing: .02em; }
+.messenger-contact p { margin: 5px 0 0; color: var(--chat-muted); font-size: 12px; }
+.messenger-header-actions { display: flex; align-items: center; justify-content: flex-end; min-width: 0; gap: 16px; }
+.messenger-model-status { min-width: 0; color: var(--chat-muted); text-align: left; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.messenger-offline { font-size: 11px; color: #6f7c6b; }
+.product-shell .product-chat-scroll { padding: 25px max(28px, calc((100% - 800px) / 2)) 32px; scrollbar-width: thin; scrollbar-color: #c6ccc2 transparent; }
+.product-shell .product-day-divider { margin: 0 0 28px; color: #737e70; font-size: 12px; }
+.product-shell .product-thread { gap: 25px; }
+.product-shell .product-exchange { gap: 24px; }
+.product-shell .product-bubble-row { align-items: flex-start; gap: 13px; }
+.product-shell .product-bubble { max-width: min(76%, 540px); padding: 11px 15px; border: 1px solid #e3e5df; border-radius: 6px; background: white; color: var(--chat-ink); box-shadow: none; }
+.product-shell .product-bubble::after { top: 14px; bottom: auto; left: -6px; width: 7px; height: 12px; }
+.product-shell .product-bubble-row.user .product-bubble { max-width: min(76%, 540px); border-color: #afd591; border-radius: 6px; background: var(--chat-green); color: var(--chat-ink); box-shadow: none; }
+.product-shell .product-bubble-row.user .product-bubble::after { right: -6px; left: auto; }
+.product-shell .product-bubble p { margin: 0; font-size: 16px; line-height: 1.8; }
+.product-shell .messenger-opening .product-bubble p + p { margin-top: 8px; }
+.messenger-revision { display: block; margin-top: 5px; color: #596c4f; font-size: 11px; text-align: right; }
+.product-shell .product-bubble-row.current .product-bubble { max-width: min(76%, 540px); background: white; }
+.product-shell .product-bubble .product-ai-followup { margin-top: 8px; }
+.product-shell .product-question-evidence { margin-top: 10px; color: var(--chat-muted); font-size: 12px; }
+.product-shell .product-question-evidence summary { padding-block: 5px; }
+.product-shell .product-ai-reply pre { background: #f1f3ed; color: var(--chat-ink); font-size: 11px; }
+.product-shell .product-typing-dots i { background: var(--chat-action); }
+.product-shell .product-rest { max-width: 490px; margin: 7px auto 0; padding: 12px 18px; color: var(--chat-muted); }
+.product-shell .product-rest strong { font-size: 13px; font-weight: 500; }
+.product-shell .product-rest p { font-size: 12px; line-height: 1.9; }
+.product-shell .product-chat-controls { padding: 14px max(28px, calc((100% - 800px) / 2)) 13px; border-top: 1px solid #dedfd8; background: #f7f7f2; }
+.product-shell .product-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 9px 12px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.product-shell .product-composer-input { min-width: 0; }
+.product-shell .product-composer-input:focus-within { outline: none; }
+.product-shell .product-composer-input textarea { min-height: 44px; max-height: 144px; padding: 10px 12px; border: 1px solid #dfe3d9; border-radius: 6px; background: white; color: var(--chat-ink); font-size: 16px; line-height: 22px; resize: none; scrollbar-width: thin; }
+.product-shell .product-composer-input textarea:focus { outline: 2px solid #92b38a; outline-offset: 1px; }
+.product-shell .product-composer-input textarea::placeholder { color: #899283; }
+.product-shell .product-composer-toolbar { display: flex; align-items: flex-end; margin: 0; padding: 0; }
+.product-shell .product-composer-actions { gap: 7px; }
+.product-shell .product-voice { width: 44px; height: 44px; border-radius: 6px; color: #647760; }
+.product-shell .product-voice:hover { background: #e7eddf; }
+.product-shell .product-voice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.product-shell .product-send { min-width: 64px; padding: 9px 15px; border-radius: 6px; background: var(--chat-action); font-size: 14px; }
+.product-shell .product-send:hover:not(:disabled) { background: #356341; }
+.product-shell .product-send:disabled { background: #e1e7db; color: #74826d; }
+.messenger-input-hint { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; margin: 0; color: #747d6e; font-size: 11px; line-height: 1.6; }
+.messenger-input-hint span { flex: none; }
+.messenger-open-page { grid-column: 1 / -1; justify-self: start; display: flex; align-items: center; gap: 12px; border: 0; padding: 6px 0; background: transparent; color: var(--accent); font-size: 12px; cursor: pointer; }
+.storage-warning { margin: 0; padding: 12px 25px; color: #81432e; background: #faf0e6; font-size: 12px; line-height: 1.8; }
+.product-shell .product-album-empty { max-width: 800px; border: 0; background: transparent; padding: 24px; margin: 25px auto 40px; }
+.product-shell .product-album-empty > h2 { font-family: SimSun, serif; font-size: clamp(24px,3vw,32px); font-weight: 500; letter-spacing: .05em; }
+.product-shell .product-album-empty .daily-album h2 { font-family: SimSun, serif; font-size: 28px; margin: 25px 0 10px; }
+.product-shell .product-album-empty .daily-album p { color: inherit; }
+.product-shell .product-album-empty .daily-prose p { font-size: 16px; line-height: 2.2; }
+.product-shell .product-album-empty .daily-album span { font: inherit; color: inherit; }
+.product-shell .product-album-empty .daily-heading > p { color: #6e786c; font-size: 11px; }
+.product-shell .product-album-empty .daily-actions .daily-primary { color: white; }
+.product-shell .product-album-empty .album-empty-eyebrow { font-size: 11px; letter-spacing: .14em; color: #54714d; }
+.product-shell .album-reset-sample { border: 0; background: transparent; color: #6c7865; }
+.daily-legacy-evidence { padding: 14px 0; color: var(--muted); font-size: 13px; }
+.clear-records-dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid #dce3d5; border-radius: 14px; color: #26332b; }
+.product-shell .product-composer-note { grid-column: 1 / -1; margin: 0; }
+.product-composer:not([data-voice-state="idle"]) .product-composer-input { grid-column: 1 / -1; padding: 9px 13px; border: 1px solid #dfe3d9; border-radius: 7px; background: white; }
+.product-composer:not([data-voice-state="idle"]) .product-composer-toolbar { grid-column: 2; }
+.product-shell .product-settings { position: relative; flex: none; width: 44px; max-width: none; min-width: 0; margin: 0; font-size: 12px; }
+.product-shell .product-settings[open] { inset: auto; z-index: auto; width: 44px; max-height: none; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; animation: none; }
+.product-shell .product-settings > summary { position: static; display: flex; justify-content: center; width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #53644f; font-size: 0; }
+.product-shell .product-settings > summary::before { display: none; }
+.product-shell .product-settings > summary:hover, .product-shell .product-settings[open] > summary { background: #e2e8dc; }
+.messenger-settings-panel { position: absolute; z-index: 6; top: 53px; right: 0; width: min(370px, calc(100vw - 32px)); max-height: calc(100dvh - 185px); overflow-y: auto; overscroll-behavior: contain; padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 12px 36px #24342620; }
+.messenger-settings-panel h2 { margin: 0 0 16px; color: var(--text); font-size: 17px; }
+.product-shell .messenger-settings-panel p { line-height: 1.8; }
+.product-shell .product-settings-actions label, .product-shell .product-advance > span { flex-basis: 100%; font-size: 12px; }
+
+@media (max-width: 1000px) {
+  .messenger-input-hint span { display: none; }
+}
+@media (max-width: 760px) {
+  .messenger-contact-preview { display: none; }
+  .product-nav-links button { flex-direction: column; justify-content: center; gap: 4px; font-size: 11px; }
+  .product-nav-links button[aria-current="page"] { background: transparent; }
+  .product-nav-links button[aria-current="page"] svg { fill: var(--accent-soft); }
+  .product-nav-foot { padding-left: 5px; border-left: 1px solid var(--border); }
+  .product-shell .product-chat { min-height: 0; }
+  .messenger-header { gap: 10px; min-height: 76px; padding: 12px 16px; }
+  .messenger-contact { gap: 9px; }
+  .messenger-contact h1 { font-size: 17px; }
+  .messenger-contact p { font-size: 10px; }
+  .messenger-contact .product-avatar { width: 34px; height: 34px; flex-basis: 34px; }
+  .messenger-header-actions { gap: 6px; }
+  .messenger-model-status { max-width: 155px; font-size: 10px; line-height: 1.6; }
+  .messenger-settings-panel { right: 0; top: 53px; max-height: calc(100dvh - 180px); padding: 20px; }
+  .product-shell .product-chat-scroll { padding: 23px 16px 25px; }
+  .product-shell .product-day-divider { font-size: 11px; }
+  .product-shell .product-avatar { width: 36px; height: 36px; flex-basis: 36px; }
+  .product-shell .product-bubble-row { gap: 11px; }
+  .product-shell .product-thread, .product-shell .product-exchange { gap: 23px; }
+  .product-shell .product-bubble, .product-shell .product-bubble-row.user .product-bubble,
+  .product-shell .product-bubble-row.current .product-bubble { max-width: calc(100% - 61px); padding: 9px 12px; }
+  .product-shell .product-bubble p { font-size: 16px; line-height: 1.7; }
+  .product-shell .product-chat-controls { padding: 10px 12px 9px; }
+  .product-shell .product-composer { gap: 8px; }
+  .product-shell .product-composer-actions { gap: 4px; }
+  .product-shell .product-send { min-width: 55px; padding-inline: 11px; }
+  .messenger-input-hint { font-size: 10px; }
+}
+@media (max-width: 360px) {
+  .messenger-model-status { max-width: 113px; }
+  .product-shell .product-composer-input textarea { padding-inline: 9px; }
+}
