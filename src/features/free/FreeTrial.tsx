@@ -13,7 +13,7 @@ import {
   sourceForMessage, sourceIsCurrent, validChatRequest,
   type PrivateChatRequest, type PrivateChatSource, type PrivateChatTurn,
 } from './privateChat'
-import { ChatAvatar, ProductIcon } from './ChatIdentity'
+import { ChatAvatar, COMPANIONS, companionImage, MicrophoneIcon, ProductIcon } from './ChatIdentity'
 import { chatOpenings, openingForHour } from '../../../shared/chatOpening'
 import AlbumPage from '../album/AlbumPage'
 import DailyAlbum from '../album/DailyAlbum'
@@ -186,6 +186,14 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [thirdUsed, setThirdUsed] = useState(restored?.thirdUsed ?? false)
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(restored ? restored.activeQuestionId : session.firstQuestionId)
   const [draft, setDraft] = useState(restored?.draft ?? '')
+  const [companionId, setCompanionId] = useState<string>('manman')
+  const companion = COMPANIONS.find((item) => item.id === companionId) ?? COMPANIONS[2]
+  const companionSrc = companionImage(companion.id)
+  const [voiceConversation, setVoiceConversation] = useState(false)
+  const [voiceDelivery, setVoiceDelivery] = useState<{ text: string; shown: number } | null>(null)
+  const [lastVoiceText, setLastVoiceText] = useState('')
+  const [callMessageId, setCallMessageId] = useState<string | null>(null)
+  const [callSeconds, setCallSeconds] = useState(0)
   const [dailyRecords, setDailyRecords] = useState<Record<string, DailyRecord>>(restored?.dailyRecords ?? {})
   const [dailySources, setDailySources] = useState<Record<string, DailyMessage[]>>(restored?.dailySources ?? {})
   const [sample, setSample] = useState(exampleRecord)
@@ -235,10 +243,83 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const voiceButtonRef = useRef<HTMLButtonElement>(null)
   const voiceRetryRef = useRef<HTMLButtonElement>(null)
   const messageInputRef = useRef<HTMLTextAreaElement>(null)
+  const voiceEntryRef = useRef<HTMLButtonElement>(null)
+  const companionPickerRef = useRef<HTMLDetailsElement>(null)
+  const voiceConversationRef = useRef(false)
+  const voiceGenerationRef = useRef(0)
+  const voiceSubmitRef = useRef<(text: string) => void>(() => {})
   const activeTabRef = useRef(activeTab)
   const recordedAudioRef = useRef<Blob | null>(null)
   const focusDraftAfterVoiceRef = useRef(false)
   const voiceDisposedRef = useRef(false)
+
+  useEffect(() => {
+    if (!voiceConversation) return
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => setCallSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000)
+    return () => window.clearInterval(timer)
+  }, [voiceConversation])
+
+  useLayoutEffect(() => {
+    if (voiceConversation) voiceButtonRef.current?.focus()
+  }, [voiceConversation])
+
+  useLayoutEffect(() => {
+    voiceSubmitRef.current = (text) => { void sendMessage(text) }
+  })
+
+  useEffect(() => {
+    if (!voiceDelivery || !voiceConversation) return
+    const characters = Array.from(voiceDelivery.text)
+    const complete = voiceDelivery.shown >= characters.length
+    const timer = window.setTimeout(() => {
+      if (complete) {
+        setLastVoiceText(voiceDelivery.text)
+        setVoiceDelivery(null)
+        setVoiceState('idle')
+        setVoiceMessage('')
+        voiceSubmitRef.current(voiceDelivery.text)
+      } else {
+        setVoiceDelivery({ ...voiceDelivery, shown: voiceDelivery.shown + 1 })
+      }
+    }, complete ? 600 : 45)
+    return () => window.clearTimeout(timer)
+  }, [voiceDelivery, voiceConversation])
+
+  function openVoiceConversation() {
+    if (voiceState !== 'idle' || chatRequestPending || typingMessageId || sendLockRef.current) return
+    voiceConversationRef.current = true
+    setVoiceConversation(true)
+    setVoiceDelivery(null)
+    setLastVoiceText('')
+    setCallMessageId(null)
+    setCallSeconds(0)
+    setVoiceMessage('')
+    if (settingsRef.current) settingsRef.current.open = false
+    if (companionPickerRef.current) companionPickerRef.current.open = false
+  }
+
+  function closeVoiceConversation(returnFocus = true) {
+    voiceGenerationRef.current++
+    voiceConversationRef.current = false
+    const recorder = recorderRef.current
+    if (recorder) {
+      recorder.onstop = null
+      recorder.onerror = null
+      if (recorder.state === 'recording') recorder.stop()
+    }
+    releaseMicrophone()
+    voiceWorkerRef.current?.terminate()
+    voiceWorkerRef.current = null
+    recordedAudioRef.current = null
+    setVoiceDelivery(null)
+    setVoiceState('idle')
+    setVoiceMessage('')
+    setVoiceConversation(false)
+    setLastVoiceText('')
+    setCallMessageId(null)
+    if (returnFocus) window.requestAnimationFrame(() => voiceEntryRef.current?.focus())
+  }
 
   const sourceByDate = useMemo(() => {
     return collectDailySources(snapshot, chatTurns, openingId, session.firstQuestionId, controlExchanges)
@@ -312,6 +393,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     voiceDisposedRef.current = false
     return () => {
       voiceDisposedRef.current = true
+      voiceGenerationRef.current++
       if (recorderRef.current?.state === 'recording') {
         recorderRef.current.onstop = null
         recorderRef.current.stop()
@@ -339,9 +421,17 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     const dismiss = (event: PointerEvent) => {
       const settings = settingsRef.current
       if (settings?.open && event.target instanceof Node && !settings.contains(event.target)) settings.open = false
+      const picker = companionPickerRef.current
+      if (picker?.open && event.target instanceof Node && !picker.contains(event.target)) picker.open = false
     }
     const escape = (event: KeyboardEvent) => {
       const settings = settingsRef.current
+      const picker = companionPickerRef.current
+      if (event.key === 'Escape' && picker?.open) {
+        picker.open = false
+        picker.querySelector('summary')?.focus()
+        return
+      }
       if (event.key === 'Escape' && settings?.open) {
         settings.open = false
         settings.querySelector('summary')?.focus()
@@ -357,13 +447,13 @@ function FreeSession({ onReset }: { onReset: () => void }) {
 
   useLayoutEffect(() => {
     if (voiceState === 'failure') voiceRetryRef.current?.focus()
-    if (voiceState === 'idle' && focusDraftAfterVoiceRef.current) {
+    if (!voiceConversation && voiceState === 'idle' && focusDraftAfterVoiceRef.current) {
       focusDraftAfterVoiceRef.current = false
       messageInputRef.current?.focus()
       const end = messageInputRef.current?.value.length ?? 0
       messageInputRef.current?.setSelectionRange(end, end)
     }
-  }, [voiceState])
+  }, [voiceState, voiceConversation])
 
   useEffect(() => {
     if (voiceState !== 'recording') return
@@ -451,7 +541,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   async function transcribeRecording(blob: Blob) {
-    if (voiceDisposedRef.current) return
+    const generation = voiceGenerationRef.current
+    const isCurrent = () => !voiceDisposedRef.current && generation === voiceGenerationRef.current
+    if (!isCurrent()) return
     if (!blob.size) {
       setVoiceMessage('没有录到声音，请重试。')
       setVoiceState('idle')
@@ -471,7 +563,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       source.connect(offline.destination)
       source.start()
       const samples = (await offline.startRendering()).getChannelData(0)
-      if (voiceDisposedRef.current) return
+      if (!isCurrent()) return
       const meanSquare = samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length
       if (!samples.length || meanSquare < 0.000009) {
         setVoiceMessage('没有录到清晰声音，请重试。')
@@ -482,12 +574,19 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       const worker = voiceWorkerRef.current ?? new Worker(new URL('./voiceWorker.ts', import.meta.url), { type: 'module' })
       voiceWorkerRef.current = worker
       worker.onmessage = (event: MessageEvent<{ type: string; text?: string; message?: string }>) => {
-        if (voiceDisposedRef.current) return
+        if (!isCurrent()) return
         if (event.data.type === 'loading') setVoiceMessage('我先准备一下，再把刚才的话写下来…')
         if (event.data.type === 'transcribing') setVoiceMessage('我在把你刚才说的话写下来…')
         if (event.data.type === 'result') {
           const text = event.data.text?.trim() ?? ''
           if (text) {
+            if (voiceConversationRef.current) {
+              recordedAudioRef.current = null
+              setVoiceMessage('这段话会自动发送')
+              setVoiceDelivery({ text, shown: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                ? Array.from(text).length : 0 })
+              return
+            }
             setDraft((current) => [current.trimEnd(), text].filter(Boolean).join('\n'))
             focusDraftAfterVoiceRef.current = true
             recordedAudioRef.current = null
@@ -506,6 +605,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         }
       }
       worker.onerror = () => {
+        if (!isCurrent()) return
         setVoiceMessage('离线识别无法启动，可以重试或放弃。')
         setVoiceState('failure')
         worker.terminate()
@@ -513,6 +613,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       }
       worker.postMessage({ samples }, [samples.buffer])
     } catch {
+      if (!isCurrent()) return
       setVoiceMessage('录音处理失败，可以重试或放弃。')
       setVoiceState('failure')
     } finally {
@@ -529,6 +630,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       return
     }
     if (voiceState !== 'idle') return
+    if (voiceConversationRef.current && (chatRequestPending || typingMessageId || sendLockRef.current)) return
+    const generation = ++voiceGenerationRef.current
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined' ||
       typeof AudioContext === 'undefined' || typeof OfflineAudioContext === 'undefined' || typeof Worker === 'undefined') {
       setVoiceMessage('当前浏览器暂不支持语音输入，请继续用文字记录。')
@@ -538,9 +641,9 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       setVoiceState('requesting')
       setVoiceMessage('正在请求麦克风权限…')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      if (voiceDisposedRef.current || activeTabRef.current !== 'chat') {
+      if (voiceDisposedRef.current || generation !== voiceGenerationRef.current || activeTabRef.current !== 'chat') {
         stream.getTracks().forEach((track) => track.stop())
-        if (!voiceDisposedRef.current) {
+        if (!voiceDisposedRef.current && generation === voiceGenerationRef.current) {
           setVoiceState('idle')
           setVoiceMessage('已离开对话，这段语音没有保存。')
         }
@@ -577,6 +680,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         }
       }, MAX_RECORDING_MS)
     } catch (error) {
+      if (voiceDisposedRef.current || generation !== voiceGenerationRef.current) return
       if (recorderRef.current?.state === 'recording') {
         recorderRef.current.onstop = null
         recorderRef.current.stop()
@@ -597,13 +701,18 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     }
     releaseMicrophone()
     setVoiceState('idle')
-    setVoiceMessage('已停止聆听，这段语音没有转成文字。草稿还在。')
+    setVoiceMessage(voiceConversationRef.current ? '这段话没有发送，准备好可以再说一次。' :
+      '已停止聆听，这段语音没有转成文字。草稿还在。')
     if (activeTabRef.current === 'chat') voiceButtonRef.current?.focus()
   }
 
   useEffect(() => {
     if (activeTab !== 'chat' && voiceState === 'recording') cancelVoiceRecording()
   }, [activeTab, voiceState])
+
+  useEffect(() => {
+    if (activeTab !== 'chat' && voiceConversation) closeVoiceConversation(false)
+  }, [activeTab, voiceConversation])
 
   function abandonVoiceTranscription() {
     recordedAudioRef.current = null
@@ -765,6 +874,13 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const controlsById = new Map(controlExchanges.map((exchange) => [exchange.id, exchange]))
   const visibleChatTurns = currentChatTurns(snapshot, chatTurns)
   const chatTurnByMessageId = new Map(visibleChatTurns.map((turn) => [turn.messageId, turn]))
+  const callTurn = callMessageId ? chatTurnByMessageId.get(callMessageId) : undefined
+  const callControl = callMessageId ? controlsById.get(callMessageId) : undefined
+  const callPending = !!lastVoiceText && (chatRequestPending || !!callMessageId && typingMessageId === callMessageId)
+  const callReply = callTurn ? [callTurn.response.reply, callTurn.response.nextQuestion].filter(Boolean).join('\n') :
+    callControl?.reply ?? (chatError && callMessageId ? chatError :
+      modelConnection.state === 'offline' && (due || extraQuestion) ? visibleQuestionText :
+      callMessageId ? '已记下这句话。' : !openingDismissed ? opening.question : '想说时，随时来。')
   const conversationTimeline: TimelineItem[] = session.projectMessages(snapshot)
     .flatMap((message): TimelineItem[] => {
       if (message.entryId) {
@@ -1038,14 +1154,15 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     }, REPLY_DELAY_MS)
   }
 
-  async function sendMessage() {
-    const text = draft.trim()
-    if (!text || sendLockRef.current || typingMessageId || voiceState !== 'idle') return
+  async function sendMessage(voiceText?: string) {
+    const text = (voiceText ?? draft).trim()
+    if (!text || sendLockRef.current || typingMessageId || (voiceState !== 'idle' && voiceText === undefined)) return
+    const voiceGeneration = voiceText === undefined ? null : voiceGenerationRef.current
     sendLockRef.current = true
     const generation = ++sendGenerationRef.current
     setChatRequestPending(true)
     setChatError('')
-    setDraft('')
+    if (voiceText === undefined) setDraft('')
     try {
     let connection = modelConnection
     if (privateChatAvailableOnThisHost(window.location.hostname) && connection.state !== 'ready') {
@@ -1063,11 +1180,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       }
       if (voiceDisposedRef.current) return
       if (sendGenerationRef.current !== generation) {
-        setDraft((current) => current || text)
+        if (voiceText === undefined) setDraft((current) => current || text)
         return
       }
       setModelConnection(connection)
     }
+    if (voiceText !== undefined && (!voiceConversationRef.current || voiceGeneration !== voiceGenerationRef.current)) return
     const useModel = connection.state === 'ready'
     const intent = classifyChatIntent(text)
     const promptId = !useModel && (due || extraQuestion) ? activeQuestionId : null
@@ -1075,10 +1193,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     try {
       result = session.sendMessage(day, text, promptId)
     } catch {
-      setDraft((current) => current || text)
+      if (voiceText === undefined) setDraft((current) => current || text)
       setStatus('这句话暂时没有保存，请重试。')
       return
     }
+    if (voiceText !== undefined && voiceConversationRef.current) setCallMessageId(result.message.id)
     refresh()
     if (result.entry) setViewedDay(day)
     if (useModel) {
@@ -1251,8 +1370,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   return (
-    <main className={'product-shell product-tab-' + activeTab} aria-label="渐知产品">
-      <nav className="product-nav screen-only" aria-label="产品导航">
+    <main className={'product-shell product-tab-' + activeTab + (voiceConversation ? ' product-shell-call' : '')} aria-label="渐知产品">
+      <nav className="product-nav screen-only" aria-label="产品导航" hidden={voiceConversation}>
         <div className="product-brand"><span className="product-brand-mark"><ProductIcon name="album" /></span>
           <strong>渐知</strong><small>慢慢认识你</small></div>
         <div className="product-nav-links">
@@ -1261,7 +1380,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
           <button type="button" aria-current={activeTab === 'data' ? 'page' : undefined} onClick={() => setActiveTab('data')}><ProductIcon name="data" /><span>生活数据</span></button>
         </div>
         <div className="messenger-contact-preview" hidden={activeTab !== 'chat'}>
-          <ChatAvatar /><div><strong>小册</strong><p>想说时，就在这里。</p></div>
+          <ChatAvatar src={companionSrc} /><div><strong>{companion.name}</strong><p>想说时，就在这里。</p></div>
         </div>
         <div className="product-nav-foot">
           <button type="button" className="product-clear" onClick={onReset} aria-label="清除本次内容">清除</button>
@@ -1274,11 +1393,82 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         {storageError && <div className="storage-warning screen-only" role="alert"><p>{storageError} 当前修改尚未可靠保存，请在画册背面下载 .md。</p><button type="button" onClick={downloadCacheBackup}>下载原缓存备份</button></div>}
         {status && <p ref={statusRef} className="free-status product-status screen-only" role="status" tabIndex={-1}>{status}</p>}
         <div className="product-content">
-          <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat'}>
+          {voiceConversation && activeTab === 'chat' && <section className="product-call-screen screen-only"
+            aria-label="渐知语音通话">
+            <div className="product-call-stage">
+              <div className={`product-call-portrait${voiceState === 'recording' ? ' is-listening' : ''}`}>
+                <img src={companionSrc} alt={`${companion.name}，渐知的${companion.label}伙伴`} />
+              </div>
+              <h1>{voiceState === 'recording' ? '聆听中' : voiceState === 'transcribing' ?
+                voiceDelivery ? '正在写下你的话' : '正在整理你说的话' : callPending ?
+                `${companion.name}正在回应` : voiceState === 'failure' ? '没能听清这次' : '准备听你说'}</h1>
+              <div className="product-call-dialogue" aria-live="polite">
+                {lastVoiceText && !voiceDelivery && <p className="product-call-said">{lastVoiceText}</p>}
+                <p className="product-call-reply">{callPending ? `稍等，${companion.name}正在输入…` :
+                  voiceDelivery || voiceState === 'transcribing' ? ' ' : callReply}</p>
+                {(voiceState === 'failure' || voiceState === 'idle' && voiceMessage) &&
+                  <p className="product-call-feedback" role="status">{voiceMessage}</p>}
+              </div>
+            </div>
+            <div className="product-call-controls">
+              <div className="product-call-transcript" aria-label="本次语音文字" aria-busy={voiceState === 'transcribing'}>
+                {voiceDelivery ? <p>{Array.from(voiceDelivery.text).slice(0, voiceDelivery.shown).join('')}<span className="product-transcript-caret" aria-hidden="true" /></p> :
+                  voiceState === 'recording' ? <div className="product-wave" aria-hidden="true">
+                    <canvas ref={voiceCanvasRef} /><span className="product-wave-still" />
+                  </div> : null}
+              </div>
+              <div className="product-call-actions">
+                <button type="button" className="product-call-mic"
+                  ref={(node) => {
+                    voiceButtonRef.current = node
+                    voiceRetryRef.current = voiceState === 'failure' ? node : null
+                  }}
+                  aria-label={voiceState === 'failure' ? '重试转写' : voiceState === 'recording'
+                    ? '说完了，转写并发送' : '开始语音对话聆听'}
+                  aria-pressed={voiceState === 'recording'}
+                  disabled={chatRequestPending || !!typingMessageId || !['idle', 'recording', 'failure'].includes(voiceState)}
+                  onClick={() => voiceState === 'failure' ? retryVoiceTranscription() : void toggleVoiceRecording()}>
+                  {voiceState === 'recording' ? <span className="product-voice-stop" aria-hidden="true" /> :
+                    <MicrophoneIcon size={28} />}
+                </button>
+                <button type="button" className="product-call-exit" aria-label="退出语音通话"
+                  title="退出语音通话" onClick={() => closeVoiceConversation()}>
+                  <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
+              <time className="product-call-time"
+                aria-label={`通话已进行 ${Math.floor(callSeconds / 60)} 分 ${callSeconds % 60} 秒`}>
+                {String(Math.floor(callSeconds / 60)).padStart(2, '0')}:
+                {String(callSeconds % 60).padStart(2, '0')}
+              </time>
+            </div>
+          </section>}
+          <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat' || voiceConversation}>
             <header className="messenger-header">
-              <div className="messenger-contact"><ChatAvatar /><div><h1>小册</h1><p>AI 记录伙伴</p></div></div>
+              <div className="messenger-contact"><ChatAvatar src={companionSrc} /><div><h1>{companion.name}</h1><p>AI 记录伙伴</p></div></div>
               <div className="messenger-header-actions">
                 {modelConnection.state === 'offline' && <span className="messenger-offline">暂时离线 · 仍可记录</span>}
+                <details className="messenger-companion-picker" ref={companionPickerRef}>
+                  <summary aria-label="选择伙伴" title="换个伙伴"><img src={companionSrc} alt="" />
+                    <span>换个伙伴</span><span aria-hidden="true">⌄</span></summary>
+                  <div className="messenger-companion-options" role="group" aria-label="渐知伙伴">
+                    {COMPANIONS.map((item) => <button type="button" key={item.id}
+                      aria-pressed={companionId === item.id} aria-label={`${item.name}，${item.label}形象`}
+                      onClick={() => {
+                        setCompanionId(item.id)
+                        if (companionPickerRef.current) {
+                          companionPickerRef.current.open = false
+                          companionPickerRef.current.querySelector('summary')?.focus()
+                        }
+                      }}>
+                      <img src={companionImage(item.id)} alt="" />
+                      <strong>{item.name}</strong>
+                    </button>)}
+                  </div>
+                </details>
                 <details className="product-settings" ref={settingsRef}><summary aria-label="邀请节奏与演示日期" title="聊天设置">邀请节奏与演示日期<ProductIcon name="more" /></summary>
                   <div className="messenger-settings-panel"><h2>聊天设置</h2>
                 <div className="messenger-model-status" aria-label="模型状态" aria-live="polite">
@@ -1314,7 +1504,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               <div className="product-thread">
                 {conversationDay === 1 && !openingDismissed && <div className="product-bubble-row agent messenger-opening"
                   aria-label="小册的开场白">
-                  <ChatAvatar />
+                  <ChatAvatar src={companionSrc} />
                   <div className="product-bubble"><p>{opening.greeting}</p><p>{opening.question}</p></div>
                 </div>}
                 {items.map((item, index) => {
@@ -1322,15 +1512,15 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                   if (item.kind === 'control') return <div className="product-exchange" key={item.messageId}>
                     {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
                     {item.exchange?.promptQuestionId && (openingDismissed || item.exchange.promptQuestionId !== session.firstQuestionId) && <div className="product-bubble-row agent">
-                      <ChatAvatar />
+                      <ChatAvatar src={companionSrc} />
                       <div className="product-bubble"><small>渐知 · 当时的问题</small>
                         <p>{snapshot.questions.find((question) => question.id === item.exchange?.promptQuestionId)?.text ?? '旧提问已撤下。'}</p></div>
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p></div><ChatAvatar user /></div>
-                    {item.exchange?.reply && typingMessageId !== item.messageId && <div className="product-bubble-row agent"><ChatAvatar />
+                    {item.exchange?.reply && typingMessageId !== item.messageId && <div className="product-bubble-row agent"><ChatAvatar src={companionSrc} />
                       <div className="product-bubble"><p>{item.exchange.reply}</p></div></div>}
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
-                      <ChatAvatar />
+                      <ChatAvatar src={companionSrc} />
                       <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
@@ -1347,7 +1537,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
                     {answered && !isProactive && (openingDismissed || snapshot.questions.find((question) =>
                       question.id === session.firstQuestionId)?.answeredByMessageId !== item.messageId) && <div className="product-bubble-row agent">
-                      <ChatAvatar />
+                      <ChatAvatar src={companionSrc} />
                       <div className="product-bubble"><small>渐知 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
                         <p>{answered.status === 'ready' ? answered.text :
                           answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
@@ -1361,7 +1551,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       {entry.revision > 1 && <span className="messenger-revision">已修订</span>}
                     </div><ChatAvatar user /></div>
                     {chatTurnByMessageId.get(item.messageId) && <div className="product-bubble-row agent">
-                      <ChatAvatar />
+                      <ChatAvatar src={companionSrc} />
                       <div className="product-bubble product-ai-reply"><small>千问 · AI 回复</small>
                         <p>{chatTurnByMessageId.get(item.messageId)!.response.reply}</p>
                         {chatTurnByMessageId.get(item.messageId)!.response.nextQuestion &&
@@ -1377,7 +1567,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 {conversationDay === day && modelConnection.state === 'offline' && !chatError &&
                   !typingMessageId && (due || extraQuestion) &&
                   (openingDismissed || activeQuestionId !== session.firstQuestionId) && <div className="product-bubble-row agent current">
-                  <ChatAvatar />
+                  <ChatAvatar src={companionSrc} />
                   <div className="product-bubble"><small>第 {day} 天 · {extraQuestion ? '主动第 3 题' : '第 ' + (questionIndex + 1) + ' 题'} · {activeQuestionMode}</small>
                     <p>{visibleQuestionText}</p>
                     {activeSourcePreview && <small className="product-question-source">{activeSourcePreview}</small>}
@@ -1403,8 +1593,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 </div>}
                 {conversationDay === day && chatError && <div className="product-rest" role="alert"><p>{chatError}</p></div>}
                 {conversationDay === day && typingMessageId && <div className="product-bubble-row agent product-typing" aria-live="polite">
-                  <ChatAvatar />
-                  <div className="product-bubble"><span>画册正在输入</span>
+                  <ChatAvatar src={companionSrc} />
+                  <div className="product-bubble"><span>{companion.name}正在输入</span>
                     <span className="product-typing-dots" aria-hidden="true"><i /><i /><i /></span></div>
                 </div>}
               </div>
@@ -1423,7 +1613,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                         }
                       }} rows={1} placeholder="想说什么，慢慢说…" />
                   </> : voiceState === 'recording' ? <div className="product-voice-panel">
-                    <div className="product-wave" aria-hidden="true"><canvas ref={voiceCanvasRef} />
+                    <div className="product-wave" aria-hidden="true"><canvas ref={voiceConversation ? undefined : voiceCanvasRef} />
                       <span className="product-wave-still" /></div>
                     <div className="product-voice-panel-foot">
                       <span className="product-recording-label"><i aria-hidden="true" />聆听中
@@ -1435,7 +1625,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     </div>
                   </div> : voiceState === 'failure' ? <div className="product-voice-state product-voice-failure">
                     <p>{voiceMessage}</p><div>
-                      <button type="button" ref={voiceRetryRef} onClick={retryVoiceTranscription}>重试转写</button>
+                      <button type="button" ref={voiceConversation ? undefined : voiceRetryRef} onClick={retryVoiceTranscription}>重试转写</button>
                       <button type="button" onClick={abandonVoiceTranscription}>放弃本次语音</button>
                     </div>
                   </div> : <div className="product-voice-state">
@@ -1445,7 +1635,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 </div>
                 <div className="product-composer-toolbar">
                   <div className="product-composer-actions">
-                  <button type="button" className="product-voice" ref={voiceButtonRef}
+                  <button type="button" className="product-call-entry" ref={voiceEntryRef}
+                    disabled={voiceState !== 'idle' || chatRequestPending || !!typingMessageId}
+                    onClick={openVoiceConversation} aria-label="语音对话" title="语音对话">
+                    <ProductIcon name="phone" />
+                  </button>
+                  <button type="button" className="product-voice" ref={voiceConversation ? undefined : voiceButtonRef}
                     onClick={() => void toggleVoiceRecording()}
                     disabled={(voiceState !== 'idle' && voiceState !== 'recording') || chatRequestPending}
                     aria-pressed={voiceState === 'recording'} aria-busy={voiceState === 'transcribing'}
@@ -1453,11 +1648,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                       voiceState === 'transcribing' ? '正在转写' : '开始语音输入'}
                     title={voiceState === 'recording' ? '结束聆听并转成文字' : '语音输入（本机识别）'}>
                     {voiceState === 'recording' ? <span className="product-voice-stop" aria-hidden="true" /> :
-                      <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
-                        strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <rect x="9" y="3" width="6" height="12" rx="3" />
-                        <path d="M6 11a6 6 0 0 0 12 0M12 17v4m-4 0h8" />
-                      </svg>}
+                      <MicrophoneIcon />}
                   </button>
                   <button type="button" className="product-send" onClick={() => {
                     void sendMessage(); messageInputRef.current?.focus()
