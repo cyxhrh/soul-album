@@ -13,6 +13,13 @@ const generated = () => ({
 })
 
 describe('daily record Markdown', () => {
+  it('uses Zhizhi on new exports and still accepts the previous assistant heading without rewriting reply text', () => {
+    const record = generated()
+    const markdown = serializeDailyRecord(record)
+    expect(markdown).toContain('### 对话 2 · 知知回答')
+    expect(parseDailyRecord(markdown.replace('### 对话 2 · 知知回答', '### 对话 2 · 小册回答'), record)).toEqual(record)
+    expect(record.messages[1].text).toBe('小册听见了。')
+  })
   it('creates an independent complete record without pretending to generate a diary', () => {
     const record = createDailyRecord('2026-09-30', messages)
     expect(record.diary).toBe('')

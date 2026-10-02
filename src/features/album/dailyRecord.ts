@@ -39,7 +39,7 @@ const messageMetadata = ({ id, role, recordedAt, revised }: DailyMessage) => ({
   id, role, recordedAt, ...(revised === undefined ? {} : { revised }),
 })
 const json = (value: unknown) => JSON.stringify(value, null, 2)
-const roleLabels = { user: '用户原文', assistant: '小册回答', system: '系统开场' }
+const roleLabels = { user: '用户原文', assistant: '知知回答', system: '系统开场' }
 const messageHeading = (message: DailyMessage, index: number) => `### 对话 ${index + 1} · ${roleLabels[message.role]}`
 
 /** A fence longer than every backtick run preserves even Markdown-looking text verbatim. */
@@ -149,7 +149,12 @@ export function parseDailyRecord(markdown: string, baseline: DailyRecord): Daily
   consume('## 完整对话\n\n')
   let sourceEdited = false
   const messages = baseline.messages.map((message, index) => {
-    consume(`${messageHeading(message, index)}\n\n`)
+    // Previously exported archives retain their heading while source text stays intact.
+    const legacyHeading = `### 对话 ${index + 1} · 小册回答\n\n`
+    const heading = message.role === 'assistant' && markdown.startsWith(legacyHeading, cursor)
+      ? legacyHeading
+      : `${messageHeading(message, index)}\n\n`
+    consume(heading)
     verifyMetadata(messageMetadata(message))
     const text = readBlock('text')
     if (text === message.text) return { ...message }

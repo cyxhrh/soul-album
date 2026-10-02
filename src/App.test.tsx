@@ -19,7 +19,7 @@ describe('Soul Album product', () => {
 
     expect(screen.getByRole('main', { name: '渐知产品' })).toBeVisible()
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
-    expect(await screen.findByLabelText('小册的开场白')).toBeVisible()
+    expect(await screen.findByLabelText('知知的开场白')).toBeVisible()
     expect(screen.queryByRole('button', { name: '千问聊天' })).not.toBeInTheDocument()
     const navigation = screen.getByRole('navigation', { name: '产品导航' })
     expect(within(navigation).getAllByRole('button').slice(0, 3).map((button) => button.textContent)).toEqual([
@@ -56,7 +56,7 @@ describe('Soul Album product', () => {
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: '清除本次内容' }))
     fireEvent.click(screen.getByRole('button', { name: '确认清除本机记录' }))
-    expect(await screen.findByLabelText('小册的开场白')).toBeVisible()
+    expect(await screen.findByLabelText('知知的开场白')).toBeVisible()
   })
 
   it('shows a short typing state before a local control reply appears', async () => {

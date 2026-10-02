@@ -79,7 +79,7 @@ test('finished guided story opens a fresh rule-based free trial, even after look
   await expect(free).toBeVisible()
   await expect(free.getByRole('region', { name: '对话记录' })).toBeVisible()
   await expect(free.getByRole('article', { name: '第 1 天画册页' })).toHaveCount(0)
-  await expect(free.getByLabel('小册的开场白')).toBeVisible()
+  await expect(free.getByLabel('知知的开场白')).toBeVisible()
   await expect(free).not.toContainText('昨晚见了朋友，聊天很开心')
   await expect(free).not.toContainText('和朋友相处让我开心，可能是返程太晚')
   await expect(free).not.toContainText('阿禾')
@@ -297,7 +297,7 @@ async function send(page: import('@playwright/test').Page, text: string) {
 
 test('two chat questions create a diary page, with a third question only by invitation', async ({ page }) => {
   await openFree(page)
-  await expect(page.getByLabel('小册的开场白')).toBeVisible()
+  await expect(page.getByLabel('知知的开场白')).toBeVisible()
   await openAlbum(page)
   await expect(page.getByText('画册还没有第一页')).toBeVisible()
   await openChat(page)

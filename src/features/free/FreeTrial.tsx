@@ -1261,7 +1261,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
           <button type="button" aria-current={activeTab === 'data' ? 'page' : undefined} onClick={() => setActiveTab('data')}><ProductIcon name="data" /><span>生活数据</span></button>
         </div>
         <div className="messenger-contact-preview" hidden={activeTab !== 'chat'}>
-          <ChatAvatar /><div><strong>小册</strong><p>想说时，就在这里。</p></div>
+          <ChatAvatar /><div><strong>知知</strong><p>想说时，就在这里。</p></div>
         </div>
         <div className="product-nav-foot">
           <button type="button" className="product-clear" onClick={onReset} aria-label="清除本次内容">清除</button>
@@ -1276,7 +1276,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         <div className="product-content">
           <section className="product-chat screen-only" aria-label="对话记录" hidden={activeTab !== 'chat'}>
             <header className="messenger-header">
-              <div className="messenger-contact"><ChatAvatar /><div><h1>小册</h1><p>AI 记录伙伴</p></div></div>
+              <div className="messenger-contact"><ChatAvatar /><div><h1>知知</h1><p>AI 记录伙伴</p></div></div>
               <div className="messenger-header-actions">
                 {modelConnection.state === 'offline' && <span className="messenger-offline">暂时离线 · 仍可记录</span>}
                 <details className="product-settings" ref={settingsRef}><summary aria-label="邀请节奏与演示日期" title="聊天设置">邀请节奏与演示日期<ProductIcon name="more" /></summary>
@@ -1313,7 +1313,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 {conversationDay > 1 && <small>演示第 {conversationDay} 天</small>}</span></p>
               <div className="product-thread">
                 {conversationDay === 1 && !openingDismissed && <div className="product-bubble-row agent messenger-opening"
-                  aria-label="小册的开场白">
+                  aria-label="知知的开场白">
                   <ChatAvatar />
                   <div className="product-bubble"><p>{opening.greeting}</p><p>{opening.question}</p></div>
                 </div>}

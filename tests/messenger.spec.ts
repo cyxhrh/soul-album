@@ -2,8 +2,14 @@ import { expect, test } from './offline-model'
 
 test('the contact header keeps model status, voice input and dismissible settings', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '小册', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '知知', exact: true })).toBeVisible()
   await expect(page.getByText('AI 记录伙伴', { exact: true })).toBeVisible()
+  const avatars = page.locator('.product-avatar:not(.product-avatar-self) img')
+  await expect(page.locator('.messenger-contact img')).toBeVisible()
+  await expect(page.getByLabel('知知的开场白').locator('img')).toBeVisible()
+  await expect.poll(() => avatars.evaluateAll(images => images.every(image =>
+    (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0,
+  ))).toBe(true)
   await expect(page.locator('[aria-label="模型状态"]')).toContainText('模型未连接 · 本地记录')
   await expect(page.getByRole('button', { name: '开始语音输入' })).toBeVisible()
   const settings = page.locator('.product-settings > summary')

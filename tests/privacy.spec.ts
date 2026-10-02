@@ -41,7 +41,7 @@ async function answer(page: Page, text: string) {
 test('skipping the first question offers a different second one, including after a prior record', async ({ page }) => {
   await openProduct(page)
   const conversation = page.getByRole('region', { name: '对话记录' })
-  await expect(conversation.getByLabel('小册的开场白')).toBeVisible()
+  await expect(conversation.getByLabel('知知的开场白')).toBeVisible()
   await answer(page, '换个问题')
   await expect(conversation).toContainText('今天有没有一个小瞬间想留在画册里？')
   await answer(page, '看到了阳台上的小鸟。')

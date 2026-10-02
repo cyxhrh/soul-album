@@ -35,7 +35,7 @@ test('one composer sends three natural turns automatically with bounded context 
   const composer = page.getByRole('textbox', { name: '发送消息' })
   const send = page.getByRole('button', { name: '发送', exact: true })
   await expect(page.locator('[aria-label="模型状态"]')).toContainText('当前模型：fake-qwen（本机已配置）')
-  await expect(chat.getByLabel('小册的开场白')).toBeVisible()
+  await expect(chat.getByLabel('知知的开场白')).toBeVisible()
   await expect(chat.getByRole('button', { name: '千问聊天' })).toHaveCount(0)
 
   await composer.fill('你好')

@@ -161,7 +161,7 @@ export default function DailyAlbum({ record, onSave, modelReady, sample = false,
         <section><h3>完整对话 <span>{record.messages.length} 条</span></h3>
           <p className="daily-help">原话、模型回应和系统问候分开保留。修订只影响此档案，不改写当时聊天。时间按 {timezone} 显示。</p>
           {record.messages.map((message) => <div className={`daily-message daily-message-${message.role}`} key={message.id} id={`archive-${message.id}`}>
-            <div><strong>{message.role === 'user' ? '我' : message.role === 'assistant' ? '小册 · 模型回答' : '系统记录'}</strong><small>{localTime(message.recordedAt)}{message.revised ? ' · 用户修订' : ''}</small></div>
+            <div><strong>{message.role === 'user' ? '我' : message.role === 'assistant' ? '知知 · 模型回答' : '系统记录'}</strong><small>{localTime(message.recordedAt)}{message.revised ? ' · 用户修订' : ''}</small></div>
             <p>{message.text}</p><small className="daily-source-id">{message.id}</small>
           </div>)}
         </section>

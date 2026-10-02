@@ -1,3 +1,5 @@
+import zhizhiAvatar from '../../assets/zhizhi-avatar.png'
+
 type IconName = 'chat' | 'album' | 'data' | 'more'
 
 export function ProductIcon({ name }: { name: IconName }) {
@@ -12,12 +14,6 @@ export function ProductIcon({ name }: { name: IconName }) {
 
 export function ChatAvatar({ user = false }: { user?: boolean }) {
   return <span className={'product-avatar' + (user ? ' product-avatar-self' : '')} aria-hidden="true">
-    {user ? '我' : <svg viewBox="0 0 44 44" width="44" height="44" fill="none">
-      <rect width="44" height="44" rx="9" fill="#dce7da" />
-      <circle cx="31" cy="12" r="5" fill="#f7edc7" />
-      <path d="M0 32 17 16l17 28H0Z" fill="#819a7c" />
-      <path d="m16 44 18-23 10 10v13Z" fill="#4e7263" />
-      <path d="m0 36 13-7 11 15H0Z" fill="#adc0a0" />
-    </svg>}
+    {user ? '我' : <img src={zhizhiAvatar} alt="" width="44" height="44" draggable={false} />}
   </span>
 }
