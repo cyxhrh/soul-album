@@ -1,0 +1,58 @@
+.daily-album { color: #26332b; min-width: 0; width: 100%; }
+.daily-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px; border-bottom: 1px solid #e3e5dc; background: #f4f5ef; }
+.daily-face-switch { display: flex; gap: 3px; padding: 3px; background: #e7ebe2; border-radius: 9px; }
+.daily-album button { font: inherit; font-size: 13px; cursor: pointer; }
+.daily-face-switch button { min-height: 36px; padding: 7px 13px; border: 0; border-radius: 7px; background: transparent; color: #637164; }
+.daily-face-switch button[aria-pressed="true"] { background: white; color: #305d40; box-shadow: 0 1px 4px #26332b0a; }
+.daily-status, .daily-help, .daily-source-id, .daily-colophon { color: #687468; font-size: 12px; line-height: 1.8; }
+.daily-paper { min-height: 425px; padding: 35px clamp(22px, 4vw, 52px); background: #faf8f2; animation: daily-appear .25s ease-out; }
+.daily-heading { margin-bottom: 30px; }
+.daily-heading > p:first-child { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; font-size: 11px; color: #6e786c; letter-spacing: .06em; }
+.daily-heading h2 { margin: 25px 0 10px; font-family: 'Noto Serif SC', 'Songti SC', SimSun, serif; font-size: clamp(23px, 2.4vw, 32px); font-weight: 500; line-height: 1.5; letter-spacing: .03em; overflow-wrap: anywhere; }
+.daily-prose { font-size: 16px; line-height: 2.2; white-space: pre-wrap; overflow-wrap: anywhere; }
+.daily-prose p { margin: 0 0 22px; }
+.daily-colophon { display: flex; justify-content: space-between; gap: 14px; border-top: 1px solid #e4e3d9; margin-top: 45px; padding-top: 17px; }
+.daily-colophon span:last-child { color: #47765b; font-family: SimSun, serif; letter-spacing: .25em; }
+.daily-unsorted { padding: 6px 0 20px; }
+.daily-unsorted > p { font-size: 17px; line-height: 1.9; }
+.daily-unsorted .daily-overline { font-size: 12px; color: #667963; }
+.daily-unsorted blockquote { margin: 26px 0 8px; padding: 12px 0 12px 20px; border-left: 2px solid #aac298; color: #52604f; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; font-size: 15px; }
+.daily-unsorted small { color: #778073; font-size: 11px; }
+.daily-bottom { padding: 17px 24px 12px; background: #fafbf7; border-top: 1px solid #e3e5dc; }
+.daily-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.daily-actions button, .daily-edit-preview > button { min-height: 40px; padding: 8px 14px; border: 1px solid #d8dfd3; border-radius: 7px; color: #385b42; background: white; }
+.daily-actions .daily-primary { background: #47765b; border-color: #47765b; color: #fff; }
+.daily-album button:disabled { opacity: .55; cursor: not-allowed; }
+.daily-album :is(button,textarea,input):focus-visible { outline: 2px solid #47765b; outline-offset: 3px; }
+.daily-archive { font-size: 14px; }
+.daily-archive h3 { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; font-size: 17px; margin: 28px 0 12px; }
+.daily-archive h3 span { font-size: 11px; font-weight: 400; color: #71806d; }
+.daily-archive h4 { font-size: 13px; color: #4d664d; margin: 24px 0 8px; }
+.daily-message { margin: 15px 0; padding: 15px 17px; border: 1px solid #e2e6dc; border-radius: 8px; background: #ffffff9c; }
+.daily-message-user { border-left: 3px solid #92b38a; }
+.daily-message > div { display: flex; gap: 9px; justify-content: space-between; flex-wrap: wrap; }
+.daily-message strong { font-size: 12px; color: #476047; }
+.daily-message small { font-size: 10px; color: #778071; overflow-wrap: anywhere; }
+.daily-message p, .daily-portrait p, .daily-portrait li { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; }
+.daily-source-id { display: block; opacity: .75; }
+.daily-portrait { margin-top: 32px; padding-top: 8px; border-top: 1px solid #e0e2d6; }
+.daily-observation { padding: 5px 15px 14px; margin: 12px 0; background: #eef1e7; border-radius: 7px; }
+.daily-observation summary, .daily-file-info { font-size: 12px; color: #607059; }
+.daily-observation blockquote { margin: 12px 0 0; padding-left: 12px; border-left: 2px solid #92b38a; }
+.daily-file-info { margin-top: 30px; }
+.daily-editor { display: grid; gap: 10px; font-size: 13px; }
+.daily-editor :is(input,textarea) { box-sizing: border-box; width: 100%; min-width: 0; padding: 12px; border: 1px solid #cdd8c7; border-radius: 7px; color: #26332b; background: #fffefb; font: inherit; line-height: 1.8; }
+.daily-editor textarea { resize: vertical; }
+.daily-editor .daily-markdown-input { font-family: Consolas, 'Microsoft YaHei', monospace; font-size: 12px; min-height: 450px; }
+.daily-edit-preview, .daily-candidate { padding: 20px; margin: 15px 0; border: 1px solid #c7d7bc; background: #f1f5eb; border-radius: 10px; overflow-wrap: anywhere; }
+.daily-edit-preview blockquote { white-space: pre-wrap; }
+.daily-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 20px 0; white-space: pre-wrap; }
+.daily-error { color: #9b402e; background: #faf0eb; padding: 14px 20px; font-size: 13px; line-height: 1.8; }
+.daily-sample-note { color: #64765b; font-size: 12px; }
+.album-sample-preview { width: min(610px, 100%); margin: 26px auto; box-shadow: 0 10px 38px #28332b0a; text-align: left; border: 1px solid #e1e4d9; border-radius: 4px 12px 12px 4px; overflow: hidden; }
+.product-shell .product-album-book .album-book-page-right { padding: 0; }
+.product-shell .product-album-book:has(.daily-album-back) { grid-template-columns: minmax(180px, .5fr) minmax(0, 1fr); }
+@keyframes daily-appear { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@media(max-width:760px) { .daily-toolbar { padding: 12px; gap: 6px; } .daily-paper { padding: 25px 20px; min-height: 380px; } .daily-bottom { padding: 14px; } .daily-status { font-size: 10px; } .daily-heading h2 { font-size: 25px; } .daily-compare { grid-template-columns: 1fr; } .daily-face-switch button { padding-inline: 10px; } .product-shell .product-album-book:has(.daily-album) { display: block; } .product-shell .product-album-book:has(.daily-album) .album-book-page-left { display: none; } }
+@media(prefers-reduced-motion:reduce) { .daily-paper { animation: none; } }
+@media print { .daily-paper { min-height: 0; padding: 15mm; animation: none; } .daily-album { break-inside: auto; } .daily-message { break-inside: avoid; } }

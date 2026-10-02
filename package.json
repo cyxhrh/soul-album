@@ -13,12 +13,13 @@
     "dev:all": "node scripts/dev-all.mjs",
     "start": "node dist-server/server/index.js",
     "demo:backend": "npm run build:backend && node dist-backend/backend/demo.js",
-    "lint": "oxlint",
+    "lint": "oxlint --ignore-pattern \"public/wasm/**\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@huggingface/transformers": "4.3.0",
     "@noble/hashes": "^2.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"

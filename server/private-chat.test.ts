@@ -46,6 +46,22 @@ async function post(url: string, payload = JSON.stringify(request), headers: Rec
 }
 
 describe('one-turn private chat endpoint', () => {
+  it('accepts only a controlled first-turn opening, never arbitrary text or mixed history', async () => {
+    const inputs: PrivateChatRequest[] = []
+    const url = await serve({ privateChatEnabled: true, privateChatProvider: provider(async ({ request: input }) => {
+      inputs.push(input)
+      return JSON.stringify({ reply: '慢慢聊。', nextQuestion: null, citations: [] })
+    }) })
+    const first = { turn: request.turn, context: [], openingId: 'morning' }
+    expect((await post(url, JSON.stringify(first))).response.status).toBe(200)
+    expect(inputs).toEqual([first])
+    for (const invalid of [
+      { ...first, openingId: 'toString' }, { ...first, openingId: { text: 'anything' } },
+      { ...first, openingId: null }, { ...first, context: request.context },
+      { ...first, precedingAssistant: request.precedingAssistant },
+    ]) expect((await post(url, JSON.stringify(invalid))).response.status).toBe(400)
+    expect(inputs).toHaveLength(1)
+  })
   it('stays disabled unless the independent chat switch and provider are both present', async () => {
     let calls = 0
     const fake = provider(async () => { calls += 1; return output })

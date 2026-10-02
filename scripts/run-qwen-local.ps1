@@ -56,7 +56,7 @@ try {
   }
   if ($EnablePrivateChat) {
     $env:SOUL_ALBUM_PRIVATE_CHAT_ENABLED = '1'
-    Write-Host 'Private-chat route is available locally; each turn still requires its own content preview and consent.'
+    Write-Host 'Private-chat route is available locally; sending a message in the product chat calls the configured model automatically.'
   }
 
   Remove-Item Env:SOUL_ALBUM_QWEN_HTTPS_PROXY -ErrorAction SilentlyContinue

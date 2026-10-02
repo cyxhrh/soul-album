@@ -116,7 +116,7 @@ export default function AiLab() {
     <main className="ai-lab" aria-label="阿禾合成 AI 实验">
       <header className="ai-lab-header">
         <div>
-          <p className="ai-lab-overline">心灵画册 / 合成 AI 实验</p>
+          <p className="ai-lab-overline">渐知 / 合成 AI 实验</p>
           <h1>让模型问一个有出处的问题</h1>
           <span className="ai-lab-badge">合成数据 · 与自由记录隔离</span>
           <p>以阿禾的虚构记录试验：模型能否提出一条轻问，并引用一整句真实存在于合成语料中的原话。</p>

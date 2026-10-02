@@ -2,7 +2,7 @@ import { resolve } from 'node:path'
 import { createSyntheticQuestionServer } from './http.js'
 import {
   createQwenPrivateChatProviderFromEnv, createQwenPrivateQuestionProviderFromEnv,
-  createQwenProviderFromEnv,
+  createQwenProviderFromEnv, createQwenDailyAlbumProviderFromEnv,
 } from './qwen.js'
 import { maxCallsFromEnv } from './config.js'
 
@@ -24,9 +24,12 @@ const server = createSyntheticQuestionServer({
   privateChatProvider: process.env.SOUL_ALBUM_PRIVATE_CHAT_ENABLED === '1'
     ? createQwenPrivateChatProviderFromEnv()
     : undefined,
+  dailyAlbumProvider: process.env.SOUL_ALBUM_PRIVATE_CHAT_ENABLED === '1'
+    ? createQwenDailyAlbumProviderFromEnv()
+    : undefined,
   maxCalls: maxCallsFromEnv(process.env.SOUL_ALBUM_AI_MAX_CALLS),
   distDir: resolve(process.cwd(), 'dist'),
 })
 server.listen(port, host, () => {
-  process.stdout.write(`心灵画册本地 AI 服务运行于 http://${host}:${port}\n`)
+  process.stdout.write(`渐知本地 AI 服务运行于 http://${host}:${port}\n`)
 })

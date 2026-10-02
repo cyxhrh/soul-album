@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './offline-model'
 
 const generated = {
   status: 'generated', scenario: 'ahe', scenarioVersion: 'ahe-v1',

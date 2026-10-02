@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createBrowserLocalSession } from './browserLocalSession'
+
+it('keeps the displayed opening question as the actual local prompt, never a journal entry', () => {
+  const session = createBrowserLocalSession({ openingId: 'morning' })
+  expect(session.read().questions[0].text).toBe('今天有什么让你期待的安排？')
+  expect(session.read().entries).toHaveLength(0)
+  session.sendMessage(1, '去散步', session.firstQuestionId)
+  expect(session.read().entries.map((entry) => entry.text)).toEqual(['去散步'])
+})
 import { selectAlbum } from './selectors'
 
 describe('browser local session', () => {

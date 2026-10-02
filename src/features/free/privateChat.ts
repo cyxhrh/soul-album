@@ -1,4 +1,5 @@
 import type { MessageView, SpaceSnapshot } from '../../../backend/local/index.js'
+import { isChatOpeningId } from '../../../shared/chatOpening.js'
 import type {
   PrivateChatRequest, PrivateChatResponse, PrivateChatSource,
 } from '../../../shared/privateChat.js'
@@ -108,6 +109,8 @@ function validSource(source: PrivateChatSource): boolean {
 export function validChatRequest(request: PrivateChatRequest): boolean {
   const sources = [request.turn, ...request.context]
   return validSource(request.turn) && request.context.length <= 2 &&
+    (request.openingId === undefined || (isChatOpeningId(request.openingId) &&
+      request.context.length === 0 && !request.precedingAssistant)) &&
     request.context.every(validSource) &&
     new Set(sources.map((source) => source.id)).size === sources.length &&
     (!request.precedingAssistant || (

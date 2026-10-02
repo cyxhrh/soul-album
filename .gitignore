@@ -19,6 +19,7 @@ dist-ssr
 *.dpapi
 *.credential
 test-results
+output/
 playwright-report
 .playwright-cli/
 frontend-scaffold/

@@ -1,4 +1,5 @@
 import { localQuestionText, type LocalQuestionKind } from '../../shared/localQuestionCopy.js'
+import { chatOpenings, isChatOpeningId, type ChatOpeningId } from '../../shared/chatOpening.js'
 import { classifyChatIntent } from '../../src/domain/chatIntent.js'
 import { journalDate } from './date.js'
 import { LocalDomainError } from './errors.js'
@@ -50,6 +51,7 @@ export interface DisplayQuestionRequest {
   displayedAt: string
   citations: CitationRef[]
   invitationId?: string | null
+  openingId?: ChatOpeningId
 }
 
 /** A cloud response is a proposal, never a new question or a new source of record. */
@@ -242,11 +244,15 @@ export class LocalJournalService {
       (request.kind === 'reflection') !== (request.citations.length > 0)) {
       throw new LocalDomainError('invalid_input')
     }
+    if (request.openingId !== undefined &&
+      (!isChatOpeningId(request.openingId) || request.kind !== 'open')) {
+      throw new LocalDomainError('invalid_input')
+    }
     const citationIds = request.citations.map((citation) => `${citation.kind}:${citation.id}`)
     if (new Set(citationIds).size !== citationIds.length) throw new LocalDomainError('invalid_input')
     const fingerprint = commandFingerprint(
       'displayQuestion', request.expectedSpaceRevision, request.kind, request.displayedAt,
-      request.citations, request.invitationId ?? null,
+      request.citations, request.invitationId ?? null, request.openingId ?? null,
     )
     return this.repository.transact(spaceId, {
       clientOperationId: request.clientOperationId, fingerprint,
@@ -282,7 +288,8 @@ export class LocalJournalService {
           : request.citations.length === 1 && request.citations[0].kind === 'observation'
             ? 'observation'
             : 'multiple'
-      const text = localQuestionText(questionKind, draft.questions.map((question) => question.text))
+      const text = request.openingId ? chatOpenings[request.openingId].question :
+        localQuestionText(questionKind, draft.questions.map((question) => question.text))
       const question: Question = {
         id: this.newId(), revision: 1, text,
         provenance: 'local_rule', status: 'ready', displayedAt: request.displayedAt,
