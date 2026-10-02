@@ -67,7 +67,7 @@ describe('Soul Album product', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送' }))
     const chat = screen.getByRole('region', { name: '对话记录' })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    expect(within(chat).getByText('画册正在输入')).toBeVisible()
+    expect(within(chat).getByText('知知正在输入')).toBeVisible()
     expect(within(chat).queryByText('好，换一个轻一点的问题。')).not.toBeInTheDocument()
     act(() => vi.advanceTimersByTime(2500))
     expect(within(chat).getByText('好，换一个轻一点的问题。')).toBeVisible()

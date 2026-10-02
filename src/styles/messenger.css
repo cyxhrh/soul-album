@@ -33,6 +33,17 @@
 .messenger-contact h1 { margin: 0; color: var(--chat-ink); font-size: 19px; font-weight: 600; letter-spacing: .02em; }
 .messenger-contact p { margin: 5px 0 0; color: var(--chat-muted); font-size: 12px; }
 .messenger-header-actions { display: flex; align-items: center; justify-content: flex-end; min-width: 0; gap: 16px; }
+.messenger-companion-picker { position: relative; z-index: 5; flex: none; }
+.messenger-companion-picker > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 7px; border-radius: 7px; color: var(--chat-muted); font-size: 12px; cursor: pointer; list-style: none; white-space: nowrap; }
+.messenger-companion-picker > summary::-webkit-details-marker { display: none; }
+.messenger-companion-picker > summary:hover { background: var(--accent-soft); }
+.messenger-companion-picker > summary img { width: 27px; height: 32px; object-fit: contain; }
+.messenger-companion-options { position: absolute; top: calc(100% + 7px); right: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: min(350px, calc(100vw - 24px)); padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 12px 30px #26332b1c; }
+.messenger-companion-options button { display: grid; justify-items: center; gap: 4px; min-width: 0; padding: 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.messenger-companion-options button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.messenger-companion-options img { width: 100%; height: 78px; object-fit: contain; }
+.messenger-companion-options strong { font-size: 12px; font-weight: 600; }
+.messenger-companion-picker > summary:focus-visible, .messenger-companion-options button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .messenger-model-status { min-width: 0; color: var(--chat-muted); text-align: left; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .messenger-offline { font-size: 11px; color: #6f7c6b; }
 .product-shell .product-chat-scroll { padding: 25px max(28px, calc((100% - 800px) / 2)) 32px; scrollbar-width: thin; scrollbar-color: #c6ccc2 transparent; }
@@ -65,6 +76,10 @@
 .product-shell .product-composer-input textarea::placeholder { color: #899283; }
 .product-shell .product-composer-toolbar { display: flex; align-items: flex-end; margin: 0; padding: 0; }
 .product-shell .product-composer-actions { gap: 7px; }
+.product-shell .product-call-entry { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: #647760; cursor: pointer; }
+.product-shell .product-call-entry:hover:not(:disabled) { background: #e7eddf; color: var(--accent); }
+.product-shell .product-call-entry:disabled { opacity: .45; cursor: default; }
+.product-shell .product-call-entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .product-shell .product-voice { width: 44px; height: 44px; border-radius: 6px; color: #647760; }
 .product-shell .product-voice:hover { background: #e7eddf; }
 .product-shell .product-voice[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -100,6 +115,36 @@
 .product-shell .messenger-settings-panel p { line-height: 1.8; }
 .product-shell .product-settings-actions label, .product-shell .product-advance > span { flex-basis: 100%; font-size: 12px; }
 
+.product-shell-call { display: block; height: 100dvh; min-height: 0; overflow: hidden; }
+.product-shell-call .product-workspace { height: 100dvh; min-height: 0; padding-bottom: 0; }
+.product-shell-call .product-content { display: block; min-height: 0; }
+.product-call-screen { display: grid; grid-template-rows: minmax(0, 1fr) auto; width: 100%; height: 100dvh; background: var(--chat-bg); }
+.product-call-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; padding: 0 24px; text-align: center; }
+.product-call-portrait { width: clamp(150px, 22vh, 230px); height: clamp(172px, 26vh, 264px); transition: transform .35s ease; }
+.product-call-portrait.is-listening { transform: scale(1.06); }
+.product-call-portrait img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.product-call-stage h1 { margin: 24px 0 0; color: var(--chat-ink); font-family: var(--sans); font-size: clamp(24px, 4vw, 34px); font-weight: 500; }
+.product-call-dialogue { width: min(100%, 480px); min-height: 100px; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.product-call-dialogue p { margin: 0 0 10px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
+.product-call-said { color: var(--chat-muted); font-size: 16px; }
+.product-call-reply { color: var(--chat-ink); font-size: 16px; }
+.product-call-feedback { color: var(--accent); font-size: 15px; }
+.product-call-controls { width: min(100%, 560px); margin: 0 auto; padding: 0 24px max(24px, env(safe-area-inset-bottom)); }
+.product-call-transcript { display: grid; align-items: center; min-height: 64px; max-height: 130px; overflow-y: auto; }
+.product-call-transcript p { margin: 0; text-align: center; font-size: 17px; line-height: 1.8; overflow-wrap: anywhere; white-space: pre-wrap; }
+.product-call-transcript .product-wave { width: min(100%, 330px); margin: auto; }
+.product-call-actions { display: flex; justify-content: center; align-items: center; gap: 20px; min-height: 76px; }
+.product-call-actions > button { cursor: pointer; font: inherit; }
+.product-call-actions .product-call-mic { display: grid; place-items: center; flex: none; width: 76px; height: 76px; padding: 0; border: 0; border-radius: 50%; background: var(--chat-action); color: var(--on-accent); transition: transform .2s ease; }
+.product-call-mic:hover:not(:disabled) { transform: scale(1.04); }
+.product-call-actions .product-call-mic:disabled { background: var(--border); color: var(--muted); cursor: wait; }
+.product-call-mic .product-voice-stop { background: currentColor; }
+.product-call-actions .product-call-exit { display: grid; place-items: center; flex: none; width: 58px; height: 58px; padding: 0; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--muted); }
+.product-call-exit:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.product-call-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.product-call-time { display: block; margin: 18px auto 0; color: var(--chat-muted); font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; }
+.product-transcript-caret { display: inline-block; width: 2px; height: 1em; margin-left: 4px; vertical-align: -.1em; background: var(--accent); }
+
 @media (max-width: 1000px) {
   .messenger-input-hint span { display: none; }
 }
@@ -131,6 +176,22 @@
   .product-shell .product-composer-actions { gap: 4px; }
   .product-shell .product-send { min-width: 55px; padding-inline: 11px; }
   .messenger-input-hint { font-size: 10px; }
+  .messenger-companion-picker { position: static; }
+  .messenger-companion-options { top: calc(100% + 7px); left: 12px; right: 12px; width: auto; }
+  .messenger-companion-picker > summary > span:first-of-type { display: none; }
+  .product-call-portrait { width: clamp(118px, 22vh, 170px); height: clamp(132px, 25vh, 190px); }
+  .product-call-stage h1 { margin-top: 16px; }
+  .product-call-dialogue { min-height: 66px; margin-top: 16px; padding-top: 12px; }
+  .product-call-controls { padding: 0 18px max(12px, env(safe-area-inset-bottom)); }
+  .product-call-transcript { min-height: 48px; max-height: 82px; }
+  .product-call-actions, .product-call-actions .product-call-mic { min-height: 58px; }
+  .product-call-actions .product-call-mic { width: 58px; height: 58px; }
+  .product-call-actions .product-call-exit { width: 50px; height: 50px; }
+  .product-call-time { margin-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-call-portrait, .product-call-actions .product-call-mic { transition: none; }
+  .product-call-portrait.is-listening { transform: none; }
 }
 @media (max-width: 360px) {
   .messenger-model-status { max-width: 113px; }
