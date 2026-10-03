@@ -1,0 +1,45 @@
+.judge-demo .judge-header-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; justify-content: flex-end; }
+.judge-badge { padding: 5px 9px; border: 1px solid #dce5d5; border-radius: 5px; color: #60745b; font-size: 11px; white-space: nowrap; }
+.judge-header-actions button, .judge-text-button, .judge-record-link button { border: 0; background: transparent; color: #47765b; cursor: pointer; font: inherit; font-size: 12px; padding: 8px 0; }
+.judge-demo button:focus-visible, .judge-demo summary:focus-visible { outline: 2px solid #47765b; outline-offset: 3px; }
+.judge-nav-note { margin: auto 10px 0; color: #6e7c68; }
+.judge-nav-note p { font-family: SimSun, serif; font-size: 15px; line-height: 2; }
+.judge-nav-note small { font-size: 10px; }
+.judge-intro { flex: none; padding: 14px max(28px, calc((100% - 800px) / 2)); border-bottom: 1px solid #e5e7df; background: #f7f8f3; }
+.judge-intro p { margin: 0 0 4px; font-size: 12px; color: #52674f; }
+.judge-intro > span { font-size: 11px; color: #7b8576; }
+.judge-record-link { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #7b8576; }
+.judge-record-link button { font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
+.judge-complete { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 80px; }
+.judge-complete strong { font-size: 14px; font-weight: 500; }
+.judge-complete p { margin: 8px 0 0; font-size: 12px; color: #71806b; }
+.judge-album-view { width: 100%; }
+.judge-album-wrap { max-width: 850px; margin: 0 auto; padding: 25px 30px 35px; }
+.judge-date-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.judge-date-nav button { min-height: 42px; padding: 8px 15px; border: 1px solid #dce2d5; border-radius: 6px; background: transparent; color: #64755d; cursor: pointer; font: inherit; font-size: 13px; }
+.judge-date-nav button[aria-pressed="true"] { background: #e8efdf; border-color: #a9c09c; color: #385a3e; }
+.judge-date-nav small { margin-left: 3px; font-size: 10px; }
+.judge-album-wrap .daily-album { border: 1px solid #dde2d5; border-radius: 3px 12px 12px 3px; overflow: hidden; box-shadow: 0 12px 38px #29372708; }
+.judge-markdown { margin: 30px 0 0; }
+.judge-markdown summary { cursor: pointer; font-size: 12px; color: #476747; padding: 8px 0; }
+.judge-markdown pre { max-height: 450px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 15px; border: 1px solid #dce2d5; border-radius: 5px; font-size: 12px; line-height: 1.7; background: #f3f4ed; }
+.judge-page-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; font-size: 12px; color: #6b7963; }
+.judge-page-nav button { min-height: 42px; padding: 8px 13px; border: 1px solid #dce2d5; border-radius: 6px; background: transparent; font: inherit; color: #476747; cursor: pointer; }
+.judge-page-nav button:disabled { opacity: .4; cursor: default; }
+@media (max-width: 760px) {
+  .judge-demo .product-nav-links { grid-template-columns: repeat(2, 1fr); }
+  .judge-nav-note { display: none; }
+  .judge-demo .messenger-header { padding: 12px 16px; min-height: 78px; gap: 10px; }
+  .judge-demo .messenger-contact h1 { font-size: 17px; }
+  .judge-demo .judge-header-actions { gap: 5px; flex-direction: column; align-items: flex-end; }
+  .judge-header-actions button { padding: 5px 0; font-size: 11px; }
+  .judge-intro { padding: 10px 16px; }
+  .judge-intro p { font-size: 11px; }
+  .judge-intro > span { font-size: 10px; }
+  .judge-demo .messenger-input-hint span { display: inline; }
+  .judge-album-wrap { padding: 18px 12px 25px; }
+  .judge-date-nav { gap: 6px; }
+  .judge-date-nav button { padding: 8px 10px; font-size: 12px; }
+  .judge-complete { min-height: 85px; }
+  .judge-complete .product-send { flex: none; }
+}
