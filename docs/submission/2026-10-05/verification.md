@@ -19,8 +19,17 @@
 
 本次代码与材料可在 [准备包发布页](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05) 核对版本并下载。页面持续部署记录见 [GitHub Actions](https://github.com/cyxhrh/soul-album/actions/workflows/pages.yml)。
 
+## 魔搭本轮部署记录
+
+- 已创建公开 Static 创空间：[Cy189789/jianji](https://modelscope.cn/studios/Cy189789/jianji)。平台 API 返回的真实应用地址为 https://cy189789-jianji.ms.show 。
+- 对应源码 `e5fca672522ee7d402edb36d6a7202cd127796e1` 的构建产物已普通推送，空间提交 `6504b05`。27 个构建文件与本机 `dist` 的 SHA256 全部一致。
+- 已触发部署；平台镜像构建和镜像推送日志显示 SUCCESS，当前 API 为 `Deploying`。
+- 启动阶段的匿名请求暂未返回应用 HTML。早期响应为 404 / Unauthorized，最新匿名响应为 412 / PreconditionFailed / function is pending state；此时不能判定公开体验已通过，也不能由早期响应断言平台必须登录。
+- 知知素材、封面及模型实验说明已上传；封面设置 API 已成功返回平台托管图片地址。公开资源内容与页面交互仍需服务运行后验收。
+- 本轮外部网页的浏览器控制持续超时，未完成云端界面操作验证；前述完整流程验证来自本机同一生产构建。
+
 ## 仍待实际提交人验收
 
-本机没有 Docker，本轮未实际构建或运行容器。创空间尚未创建或部署，不能将 Dockerfile 的准备完成等同于平台上线成功。
+本机没有 Docker，未运行可选根 Dockerfile；实际魔搭路线为 Static，由平台完成其托管镜像构建。
 
-队友须用自己的 ModelScope 账号完成部署，在匿名窗口与手机验证公开应用，回填必填创空间 URL，并核对登录表单中的完整字段、资格和截止时刻。最终提交及条款核对由参赛人完成。
+待服务进入 Running 并通过匿名 HTTP 检查后，再在未登录窗口与手机验证公开应用，核对表单中的完整字段、资格和截止时刻。最终提交及条款核对由参赛人完成，比赛表单尚未提交。

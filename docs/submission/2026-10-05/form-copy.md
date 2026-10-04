@@ -1,6 +1,6 @@
 # 渐记 · 提交表单文案
 
-更新：2026-10-05。以下文案对应当前比赛 Demo；提交前由队友核对身份信息与公开链接。队名、队员、创空间账号尚未提供，需本人填写。
+更新：2026-10-05。以下文案对应当前比赛 Demo；提交前由队友核对身份信息与公开链接。队名、队员需本人填写；创空间已创建为 `Cy189789/jianji`，HTTP 与匿名体验验收待完成，见 [验证记录](verification.md)。
 
 ## 作品名
 
@@ -38,8 +38,9 @@
 
 | 字段 | 填写方式 |
 | --- | --- |
-| 作品应用创空间链接（必填） | **待回填：本人账号下可公开访问的 ModelScope 创空间作品地址。** GitHub 仓库或 Pages 地址放补充材料，不替代该字段。 |
-| 公开 Demo 入口（补充） | https://cyxhrh.github.io/soul-album/ ，默认进入评委模式。创空间上线后再补该平台的应用预览链接。 |
+| 作品应用创空间链接（所选魔搭方式必填） | https://modelscope.cn/studios/Cy189789/jianji 。空间已创建公开，验收后填此项目页；GitHub 仓库或 Pages 地址仅放补充材料。 |
+| 创空间应用预览 | https://cy189789-jianji.ms.show 。已触发 Static 部署，HTTP 与匿名体验验收待完成。 |
+| 公开 Demo 入口（补充） | https://cyxhrh.github.io/soul-album/ ，默认进入评委模式。 |
 | 源代码 / 提交材料 | [源码分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration) · [提交材料](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration/docs/submission/2026-10-05) · [下载包](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05) |
 | 模型、数据集、Notebook、MCP、Skill、实践内容（选填） | 仅填写已有且可公开核查的对应材料。未发布这些资源时留空，不借用与作品无关的链接。 |
 

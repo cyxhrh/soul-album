@@ -2,7 +2,7 @@
 
 **渐记日常，渐见自己。** 更新：2026-10-05。供队友检查、补齐并提交，尚未代填比赛表单。
 
-先打开 [在线 Demo](https://cyxhrh.github.io/soul-album/)，再按下方顺序准备。提交材料与源码均在 `codex/teammate-frontend-integration` 分支；[打包下载](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)提供材料 ZIP 和已构建静态站点 ZIP。
+本轮已创建公开的 [魔搭创空间项目页](https://modelscope.cn/studios/Cy189789/jianji)，应用地址为 [渐记在线预览](https://cy189789-jianji.ms.show)。空间使用 Static SDK，已同步构建产物并触发部署，**HTTP 与匿名体验验收尚待完成**，最终证据见 [验证记录](verification.md)。[GitHub Pages](https://cyxhrh.github.io/soul-album/)保留为补充体验入口。提交材料与源码均在 `codex/teammate-frontend-integration` 分支；[打包下载](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)提供材料 ZIP 和已构建静态站点 ZIP。
 
 ## 已准备的材料
 
@@ -14,20 +14,20 @@
 | [比赛横版封面](cover-1920x1080.png) | 1920 × 1080，16:9，PNG，可上传作品封面字段 |
 | [Markdown 记录样例](sample-diary-2026-10-04.md) | 完整对话、精炼日记、今日肖像及理解修订，可在外部查阅和编辑 |
 | [真实千问实验记录](../../../public/evidence/qwen-synthetic-trial-2026-09-29.md) | 2026-09-29 一次固定合成资料调用的输入、结果和校验记录 |
-| [魔搭部署说明](deployment.md) | 根 Dockerfile、7860 端口、预设演示构建及静态包部署 |
+| [魔搭部署说明](deployment.md) | 本轮 Static SDK 部署地址与版本、后续更新步骤；Docker 为可选路线 |
 | [字段与官方依据](requirements.md) | 区分已核对要求与待登录页面确认的字段 |
-| [队友最终检查清单](teammate-review.md) | 完成账号信息、公开创空间链接和提交前验收 |
+| [队友最终检查清单](teammate-review.md) | 已填创空间链接、待补队伍资料与提交前验收 |
 | [本轮验证记录](verification.md) | 构建、测试、浏览器体验和仍待完成的云端检查 |
 
 ## 队友接手顺序
 
-1. 体验公开 Demo，检查五轮对话、原话与理解、日常、通话及伙伴选择。
-2. 按 [部署说明](deployment.md) 创建公开 ModelScope 创空间。可用根 Dockerfile 构建，也可选择 Static SDK 上传静态 ZIP 解压后的内部文件。
-3. 用未登录窗口访问创空间，走完主流程，并确认手机可用；记录最终空间链接和部署版本。
+1. 查看 [验证记录](verification.md)确认云端部署与验收状态，再打开已有创空间；不必重复创建空间。
+2. 体验五轮对话、原话与理解、日常、通话及伙伴选择；若需更新内容，按 [部署说明](deployment.md)同步 Static 构建产物。
+3. 用未登录窗口访问创空间，走完主流程，并确认手机可用；核对本轮链接与版本。
 4. 按 [表单文案](form-copy.md) 粘贴内容，补队名、队员和联系方式；依实际表单核对作品图片、赛道、截止时刻及其他字段。
 5. 按 [检查清单](teammate-review.md) 查漏补缺，最后由参赛人核对承诺条款并提交，保留成功回执。
 
-**仍需队友完成：必填的 ModelScope 创空间公开地址、账号与队伍资料、云端匿名访问验收、最终表单提交。** GitHub Pages 是补充体验入口，不能替代截图中的创空间字段。未发布模型、数据集、Notebook、MCP、Skill 或实践内容时，对应选填项留空。
+**仍需完成：云端匿名访问验收、队伍资料、最终表单提交。** 用户已选择推荐的魔搭方式，应用字段填已有的创空间项目页；GitHub Pages 是补充入口。未发布模型、数据集、Notebook、MCP、Skill 或实践内容时，对应选填项留空。
 
 ## 当前体验的能力边界
 
