@@ -1,0 +1,53 @@
+{
+  "prepared_on": "2026-10-05",
+  "media": [
+    {
+      "file": "assets/jianji-poster.png",
+      "original_filename": "70aa9abbc7c94d32ae692e2f687e5eeb.png",
+      "bytes": 1286133,
+      "width": 1086,
+      "height": 1448,
+      "sha256": "b91a389386e65fad629515477774dc46aa8d108b4e3256daa2a889e7ca88ed74",
+      "unchanged_from_user_file": true
+    },
+    {
+      "file": "assets/jianji-product-story.png",
+      "original_filename": "7e96d07e47b4db177a65e1d29b3a36ed.png",
+      "bytes": 1095815,
+      "width": 750,
+      "height": 4952,
+      "sha256": "98f9016d87c514e4074a86174c961bdb6c22b8a27d3e64cae9e5d5dfe00a3a6c",
+      "unchanged_from_user_file": true
+    },
+    {
+      "file": "jianji-promo-v4-creative-minds-2026-10-05.mp4",
+      "original_filename": "渐记-宣传片-v4-CreativeMinds配乐预览版.mp4",
+      "bytes": 35065008,
+      "width": 1920,
+      "height": 1080,
+      "sha256": "7bdeab8b982dd92208344ec020dbecc4ed7a0befe9d8857bbd94249fbd730e5c",
+      "unchanged_from_user_file": true,
+      "duration_seconds": 90.0,
+      "frame_rate": 30,
+      "video_codec": "H.264 High",
+      "pixel_format": "yuv420p",
+      "audio_codec": "AAC LC",
+      "audio_sample_rate": 48000,
+      "audio_channels": 2,
+      "public_url": "https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-promo-v4-creative-minds-2026-10-05.mp4"
+    }
+  ],
+  "video_permission": {
+    "status": "confirmed_by_user",
+    "confirmed_on": "2026-10-05",
+    "user_statement": "已取得，可以公开使用这版视频",
+    "scope": "用户选定的 Creative Minds 配乐宣传片版本",
+    "license_document_audited": false
+  },
+  "publication": {
+    "spotlight_article_published": false,
+    "spotlight_article_url": null,
+    "official_creation_entry": "https://modelscope.cn/learn/create",
+    "native_video_upload_support": "not_verified"
+  }
+}
