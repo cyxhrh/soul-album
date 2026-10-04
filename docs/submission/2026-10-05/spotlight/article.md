@@ -14,7 +14,7 @@
 
 后续将结合过往记录，提出情绪与行为变化的线索，由用户确认和修正；逐步接入经授权的手机、穿戴和办公记录。持续跨日模型检索与真实设备接入仍在后续开发计划中。
 
-[查看产品长图：对话、画册与日常数据](https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-product-story.png)
+![产品长图：对话、画册与日常数据](https://resources.modelscope.cn/race/image/77d4396d-1297-4661-a922-c4f36fdd0422.png)
 
 渐记宣传片 · 90 秒 · 1920 × 1080
 

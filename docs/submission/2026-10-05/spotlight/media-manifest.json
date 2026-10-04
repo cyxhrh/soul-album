@@ -22,13 +22,24 @@
       "height": 4952,
       "sha256": "98f9016d87c514e4074a86174c961bdb6c22b8a27d3e64cae9e5d5dfe00a3a6c",
       "unchanged_from_user_file": true,
-      "article_presentation": "external_github_file_link",
-      "article_link": "https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-product-story.png",
+      "article_presentation": "native_inline_image",
+      "article_link": "https://resources.modelscope.cn/race/image/77d4396d-1297-4661-a922-c4f36fdd0422.png",
       "native_upload_completed_in_editor": true,
       "native_upload_resource_url": "https://resources.modelscope.cn/race/image/77d4396d-1297-4661-a922-c4f36fdd0422.png",
-      "native_displayed_on_public_page": false,
-      "native_embedded": false,
-      "article_link_verified_in_public_dom": true
+      "native_displayed_on_public_page": true,
+      "native_embedded": true,
+      "prior_publication_article_link": "https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-product-story.png",
+      "prior_publication_article_link_verified_in_public_dom": true,
+      "prior_publication_native_displayed_on_public_page": false,
+      "native_saved_and_reloaded_in_editor": true,
+      "native_public_image_complete": true,
+      "native_public_natural_width": 750,
+      "native_public_natural_height": 4952,
+      "native_insertion_method": "html_single_image_using_existing_modelscope_resource",
+      "native_public_dom_verified_on": "2026-10-05",
+      "native_resource_anonymous_head_verified": true,
+      "native_resource_anonymous_http_status": 200,
+      "native_resource_http_content_type": "application/octet-stream"
     },
     {
       "file": "jianji-promo-v4-creative-minds-2026-10-05.mp4",
@@ -103,15 +114,15 @@
     "native_video_max_size_label": "2G",
     "native_video_playback_verified": false,
     "incomplete_media_removed_from_editor": true,
-    "editor_status": "article_published_external_media_links_verified",
+    "editor_status": "article_updated_native_long_image_and_external_poster_video",
     "spotlight_article_title": "渐记｜让 AI 更了解你，也让你更了解自己",
     "published_on": "2026-10-05",
     "associated_studio": "Cy189789/jianji",
     "anonymous_verification_status": "passed",
     "native_video_embedded": false,
-    "native_images_displayed_on_public_page": false,
-    "native_image_embedding_verified": false,
-    "image_external_links_status": "public_dom_verified",
+    "native_images_displayed_on_public_page": true,
+    "native_image_embedding_verified": true,
+    "image_external_links_status": "poster_link_public_dom_verified_long_link_replaced_by_image",
     "cover_upload_success": false,
     "cover_type": "platform_default",
     "cover_asset": "learn_cyan.png",
@@ -130,22 +141,83 @@
         "component_recreated": true,
         "editor_saved_and_reloaded": true,
         "error": "upload_error_no_transfer"
+      },
+      {
+        "file": "jianji-promo-upload.mp4",
+        "attempted_on": "2026-10-05",
+        "uploaded": false,
+        "transfer_started": false,
+        "file_chooser_upload_disabled": true,
+        "html_video_paste_created_player": false,
+        "failed_components_removed": true
       }
     ],
     "anonymous_http_verified": true,
     "anonymous_http_status": 200,
     "canonical_redirect_url": "https://modelscope.cn/posts/437111",
-    "html_article_title_verified": true,
     "html_verified_markers": {
+      "77d4396d-1297-4661-a922-c4f36fdd0422.png": true,
       "jianji-poster.png": true,
-      "jianji-product-story.png": true,
       "jianji-promo-v4-creative-minds-2026-10-05.mp4": true,
       "cy189789-jianji.ms.show": true,
       "qwen3.8-flash": true
     },
-    "anonymous_http_checked_at": "2026-10-04T23:28:05.555080+00:00",
+    "anonymous_http_checked_at": "2026-10-04T23:49:31.228151+00:00",
     "public_dom_verified": true,
     "initial_published_detail_url": "https://modelscope.cn/learn/437111",
-    "initial_detail_redirect_status": 301
+    "initial_detail_redirect_status": 301,
+    "verification_history": [
+      {
+        "editor_status": "article_published_external_media_links_verified",
+        "native_images_displayed_on_public_page": false,
+        "native_image_embedding_verified": false,
+        "image_external_links_status": "public_dom_verified",
+        "anonymous_verification_status": "passed",
+        "anonymous_http_verified": true,
+        "anonymous_http_status": 200,
+        "html_article_title_verified": true,
+        "html_verified_markers": {
+          "jianji-poster.png": true,
+          "jianji-product-story.png": true,
+          "jianji-promo-v4-creative-minds-2026-10-05.mp4": true,
+          "cy189789-jianji.ms.show": true,
+          "qwen3.8-flash": true
+        },
+        "anonymous_http_checked_at": "2026-10-04T23:28:05.555080+00:00",
+        "public_dom_verified": true,
+        "revision": "initial_publication_external_links"
+      }
+    ],
+    "native_image_count": 1,
+    "media_update_on": "2026-10-05",
+    "native_image_attempts": [
+      {
+        "files": [
+          "assets/jianji-poster.png",
+          "assets/jianji-product-story.png"
+        ],
+        "method": "toolbar_local_upload",
+        "component_status": "error",
+        "success": false
+      },
+      {
+        "method": "github_image_url_html_paste",
+        "component_status": "error",
+        "success": false
+      },
+      {
+        "file": "assets/jianji-product-story.png",
+        "method": "html_single_image_using_existing_modelscope_resource",
+        "resource_url": "https://resources.modelscope.cn/race/image/77d4396d-1297-4661-a922-c4f36fdd0422.png",
+        "component_status": "success",
+        "editor_saved_and_reloaded": true,
+        "public_image_complete": true,
+        "public_natural_width": 750,
+        "public_natural_height": 4952,
+        "success": true
+      }
+    ],
+    "anonymous_verification_report": "output/modelscope-runtime/spotlight-inline-image-anonymous-verification.json",
+    "public_screenshot": "output/modelscope-runtime/spotlight-inline-long-image-2026-10-05.jpg"
   }
 }

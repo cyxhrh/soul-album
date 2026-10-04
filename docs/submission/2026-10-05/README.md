@@ -12,7 +12,7 @@
 | [体验与讲解指南](demo-guide.md) | 五轮对话 → 来源核对 → 理解修正 → 画册 → 日常 → 下一次见面 |
 | [演示截图](screenshots/README.md) | 当前提交构建的实际界面，全部为合成示例 |
 | [比赛横版封面](cover-1920x1080.png) | 1920 × 1080，16:9，PNG，可上传作品封面字段 |
-| [魔搭实践内容图文视频包](spotlight/README.md) | [文章已发布](https://modelscope.cn/posts/437111)，公开正文与匿名 HTTP 已核对；两张图提供 GitHub 文件链接，完整 90 秒原片提供下载链接，无内嵌图片或视频 |
+| [魔搭实践内容图文视频包](spotlight/README.md) | [文章已发布](https://modelscope.cn/posts/437111)，产品长图已插入正文，公开显示与匿名 HTTP 已核对；海报提供 GitHub 文件链接，完整 90 秒原片提供下载链接，视频未内嵌 |
 | [Markdown 记录样例](sample-diary-2026-10-04.md) | 完整对话、精炼日记、今日肖像及理解修订，可在外部查阅和编辑 |
 | [真实千问实验记录](../../../public/evidence/qwen-synthetic-trial-2026-09-29.md) | 2026-09-29 一次固定合成资料调用的输入、结果和校验记录 |
 | [魔搭部署说明](deployment.md) | 本轮 Static SDK 部署地址与版本、后续更新步骤；Docker 为可选路线 |
