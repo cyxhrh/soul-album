@@ -2,7 +2,7 @@
 
 **渐记日常，渐见自己。** 更新：2026-10-05。供队友检查、补齐并提交，尚未代填比赛表单。
 
-本轮已创建公开的 [魔搭创空间项目页](https://modelscope.cn/studios/Cy189789/jianji)，应用地址为 [渐记在线预览](https://cy189789-jianji.ms.show)。空间使用 Static SDK，已同步构建产物并触发部署，**HTTP 与匿名体验验收尚待完成**，最终证据见 [验证记录](verification.md)。[GitHub Pages](https://cyxhrh.github.io/soul-album/)保留为补充体验入口。提交材料与源码均在 `codex/teammate-frontend-integration` 分支；[打包下载](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)提供材料 ZIP 和已构建静态站点 ZIP。
+本轮已创建公开的 [魔搭创空间项目页](https://modelscope.cn/studios/Cy189789/jianji)，应用地址为 [渐记在线预览](https://cy189789-jianji.ms.show)。空间使用 Static SDK，状态为 **Running，匿名 HTTP 页面与主要资源已验证**，证据见 [验证记录](verification.md)。云端浏览器完整交互及手机复核仍由队友完成。[GitHub Pages](https://cyxhrh.github.io/soul-album/)保留为补充体验入口。提交材料与源码均在 `codex/teammate-frontend-integration` 分支；[打包下载](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)提供材料 ZIP 和已构建静态站点 ZIP。
 
 ## 已准备的材料
 
@@ -27,7 +27,7 @@
 4. 按 [表单文案](form-copy.md) 粘贴内容，补队名、队员和联系方式；依实际表单核对作品图片、赛道、截止时刻及其他字段。
 5. 按 [检查清单](teammate-review.md) 查漏补缺，最后由参赛人核对承诺条款并提交，保留成功回执。
 
-**仍需完成：云端匿名访问验收、队伍资料、最终表单提交。** 用户已选择推荐的魔搭方式，应用字段填已有的创空间项目页；GitHub Pages 是补充入口。未发布模型、数据集、Notebook、MCP、Skill 或实践内容时，对应选填项留空。
+**仍需队友完成：云端浏览器完整交互与手机复核、队伍资料、最终表单提交。** 用户已选择推荐的魔搭方式，应用字段填已有的创空间项目页；GitHub Pages 是补充入口。未发布模型、数据集、Notebook、MCP、Skill 或实践内容时，对应选填项留空。
 
 ## 当前体验的能力边界
 

@@ -1,6 +1,6 @@
 # 渐记 · 提交表单文案
 
-更新：2026-10-05。以下文案对应当前比赛 Demo；提交前由队友核对身份信息与公开链接。队名、队员需本人填写；创空间已创建为 `Cy189789/jianji`，HTTP 与匿名体验验收待完成，见 [验证记录](verification.md)。
+更新：2026-10-05。以下文案对应当前比赛 Demo；提交前由队友核对身份信息与公开链接。队名、队员需本人填写；创空间 `Cy189789/jianji` 已 Running，匿名 HTTP 页面与主要资源验证通过，云端浏览器完整交互和手机复核仍待队友完成，见 [验证记录](verification.md)。
 
 ## 作品名
 
@@ -38,8 +38,8 @@
 
 | 字段 | 填写方式 |
 | --- | --- |
-| 作品应用创空间链接（所选魔搭方式必填） | https://modelscope.cn/studios/Cy189789/jianji 。空间已创建公开，验收后填此项目页；GitHub 仓库或 Pages 地址仅放补充材料。 |
-| 创空间应用预览 | https://cy189789-jianji.ms.show 。已触发 Static 部署，HTTP 与匿名体验验收待完成。 |
+| 作品应用创空间链接（所选魔搭方式必填） | https://modelscope.cn/studios/Cy189789/jianji 。空间公开且 Running，填此项目页；提交前队友完成浏览器与手机复核，GitHub 仓库或 Pages 地址仅放补充材料。 |
+| 创空间应用预览 | https://cy189789-jianji.ms.show 。匿名 HTTP 页面与主要资源已验证，证据见 verification.md；云端完整交互尚待复核。 |
 | 公开 Demo 入口（补充） | https://cyxhrh.github.io/soul-album/ ，默认进入评委模式。 |
 | 源代码 / 提交材料 | [源码分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration) · [提交材料](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration/docs/submission/2026-10-05) · [下载包](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05) |
 | 模型、数据集、Notebook、MCP、Skill、实践内容（选填） | 仅填写已有且可公开核查的对应材料。未发布这些资源时留空，不借用与作品无关的链接。 |

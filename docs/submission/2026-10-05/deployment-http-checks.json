@@ -1,0 +1,130 @@
+{
+  "checked_at_utc": "2026-10-05T05:13:40.236353+08:00",
+  "project_url": "https://modelscope.cn/studios/Cy189789/jianji",
+  "app_url": "https://cy189789-jianji.ms.show/",
+  "source_commit": "e5fca672522ee7d402edb36d6a7202cd127796e1",
+  "space_commit": "6504b05",
+  "platform_status": "Running",
+  "authentication_sent": false,
+  "verified_url_count": 13,
+  "checks": [
+    {
+      "url": "https://cy189789-jianji.ms.show/",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "66048e20cf493f646887bbab0a82d8fbdeec8e96e517a6709f40f470d200a4b7",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/?demo=judge",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "66048e20cf493f646887bbab0a82d8fbdeec8e96e517a6709f40f470d200a4b7",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/assets/index-DcrBt0VX.js",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "5a2e86dfdc3e1211636a23a21a64fc1af962aed74995fb4e20feecdefaccb839",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/assets/index-BEkNfMNX.css",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "03ee791b17fb7c6327ae666567be4846b1e28e10fb743b12543abffe57787903",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/assets/zhizhi-avatar-BcGlFk6u.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "3536c61657b2b7bbc710e262c278172af29a60c999649949e72c2fcadb188ab3",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/characters/jianji-xiaojian-cutout.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "e0c2159a1de3a73fc7b155baf725dbee5be8a04da9334c9555853ef4c17cb240",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/characters/jianji-manman-cutout.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "864f537a5cde4dd236484addbc89abdde1db47ee27703eda4df9a2f4fa85e5bc",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/characters/jianji-zhimo-cutout.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "40399c1319387b2ffdd3711402744cd8444048ab84fc1ce09fc9fd6b40db2386",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/stickers/happy.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "0a489aa3b959318ce7365509bf056c7001409d6234fecf28554309002595a2d1",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/stickers/sleepy.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "3fed43a9c8d11f1bd558add1ded98b9f089e29331511ff9f2534bf76afeb96f0",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/evidence/qwen-synthetic-trial-2026-09-29.md",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "248b37b752de7775a45187091d8d4fb3c7c6f00b6c6ecbfbdd1bedfbef609119",
+      "matches_local_bytes": false,
+      "same_after_normalizing_line_endings": true
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/brand/jianzhi-sprout.svg",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "8d622927eea9c12ef4cfedbe6ca0384ec2dbafcd085e81720e13545e6587aa18",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    },
+    {
+      "url": "https://cy189789-jianji.ms.show/cover-1920x1080.png",
+      "status": 200,
+      "passed": true,
+      "anonymous_access": true,
+      "sha256": "c0ac46094e6903a8ce0b0f0c0a99ed8fc74cf76b1b89436270f1f68042d665b8",
+      "matches_local_bytes": true,
+      "same_after_normalizing_line_endings": null
+    }
+  ],
+  "scope": "Anonymous HTTP content verification. Cloud browser interaction remains for teammate review."
+}

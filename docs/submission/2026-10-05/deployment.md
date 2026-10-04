@@ -13,9 +13,9 @@
 | SDK / 可见性 | Static / 公开 |
 | 构建产物对应源码 | `e5fca672522ee7d402edb36d6a7202cd127796e1` |
 | 创空间普通推送版本 | `6504b05` |
-| 部署记录 | 已触发；平台镜像构建日志 SUCCESS，API 仍为 Building，HTTP 与匿名体验验收待完成 |
+| 部署记录 | Running；匿名根 HTML 与主要页面资源返回 HTTP 200，构建内容核对通过；云端浏览器完整交互与手机复核仍待队友完成 |
 
-最终运行状态和验收证据见 [verification.md](verification.md)。平台在内部构建中使用临时 Dockerfile，不是空间 Git 新版本；本项目所选 SDK 仍为 Static。
+运行状态、HTTP 资源核对及能力范围见 [verification.md](verification.md)。根 HTML、JS/CSS、头像、三种角色、两种表情、图标与封面已匿名验证并核对构建哈希；实验记录返回 200 且正文正确（Git 换行差异已单独确认）。云端浏览器完整操作与手机体验仍由队友复核，本机 E2E 不等于远端完整走通。平台在内部构建中使用临时 Dockerfile，不是空间 Git 新版本；本项目所选 SDK 仍为 Static。
 
 ## Static 更新步骤
 
@@ -70,7 +70,7 @@ ModelScope 的 **Static SDK 不提供前端构建步骤**，只有已经构建�
 ## 提交前由队友补齐
 
 - 创空间公开项目链接已填： https://modelscope.cn/studios/Cy189789/jianji ，不能用 localhost 或 GitHub 源码地址替代。
-- 应用在线预览链接已填： https://cy189789-jianji.ms.show ，仍待 HTTP 与匿名体验验收，首次进入须为评委流程。
+- 应用在线预览链接已填： https://cy189789-jianji.ms.show ，HTTP 页面与主要资源已验证，云端完整交互与手机体验仍须队友复核。
 - 部署分支 `master`、公开空间提交 `6504b05`；后续更新及最终运行版本以 verification.md 为准。
 - 匿名窗口验证：五次发送 → 原话依据 → 纠正理解 → 画册 → 日常原话 → 下一次见面；检查形象选择、语音预览、通话界面仍可访问。
 
