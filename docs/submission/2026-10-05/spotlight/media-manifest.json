@@ -8,7 +8,11 @@
       "width": 1086,
       "height": 1448,
       "sha256": "b91a389386e65fad629515477774dc46aa8d108b4e3256daa2a889e7ca88ed74",
-      "unchanged_from_user_file": true
+      "unchanged_from_user_file": true,
+      "article_presentation": "external_github_file_link",
+      "article_link": "https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-poster.png",
+      "native_embedded": false,
+      "article_link_verified_in_public_dom": true
     },
     {
       "file": "assets/jianji-product-story.png",
@@ -17,7 +21,14 @@
       "width": 750,
       "height": 4952,
       "sha256": "98f9016d87c514e4074a86174c961bdb6c22b8a27d3e64cae9e5d5dfe00a3a6c",
-      "unchanged_from_user_file": true
+      "unchanged_from_user_file": true,
+      "article_presentation": "external_github_file_link",
+      "article_link": "https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-product-story.png",
+      "native_upload_completed_in_editor": true,
+      "native_upload_resource_url": "https://resources.modelscope.cn/race/image/77d4396d-1297-4661-a922-c4f36fdd0422.png",
+      "native_displayed_on_public_page": false,
+      "native_embedded": false,
+      "article_link_verified_in_public_dom": true
     },
     {
       "file": "jianji-promo-v4-creative-minds-2026-10-05.mp4",
@@ -34,7 +45,42 @@
       "audio_codec": "AAC LC",
       "audio_sample_rate": 48000,
       "audio_channels": 2,
-      "public_url": "https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-promo-v4-creative-minds-2026-10-05.mp4"
+      "public_url": "https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-promo-v4-creative-minds-2026-10-05.mp4",
+      "article_presentation": "external_download_link",
+      "native_uploaded": false,
+      "native_embedded": false,
+      "audio_packet_sha256": "6f00af1cf68b7e65d6a340dba6bce0b93a90abcf3e8b5bcf73464f743a8ae6bd"
+    },
+    {
+      "file": "jianji-promo-upload.mp4",
+      "kind": "technical_upload_copy",
+      "derived_from": "jianji-promo-v4-creative-minds-2026-10-05.mp4",
+      "source_sha256": "7bdeab8b982dd92208344ec020dbecc4ed7a0befe9d8857bbd94249fbd730e5c",
+      "bytes": 11555797,
+      "sha256": "5ef868b4a88bfee1db2a7a52810cf26ad0410a5ba82b35decdca11cb75723b4c",
+      "width": 1920,
+      "height": 1080,
+      "duration_seconds": 90.0,
+      "frame_rate": 30,
+      "frame_count": 2700,
+      "video_codec": "H.264",
+      "video_reencoded": true,
+      "full_duration_and_frame_order_preserved": true,
+      "pixel_format": "yuv420p",
+      "audio_codec": "AAC LC",
+      "audio_sample_rate": 48000,
+      "audio_channels": 2,
+      "audio_stream_copied": true,
+      "audio_packet_sha256": "6f00af1cf68b7e65d6a340dba6bce0b93a90abcf3e8b5bcf73464f743a8ae6bd",
+      "audio_packet_hash_matches_original": true,
+      "faststart": true,
+      "full_decode_verified": true,
+      "unchanged_from_user_file": false,
+      "original_preserved": true,
+      "native_uploaded": false,
+      "native_embedded": false,
+      "public_url": null,
+      "included_in_release": false
     }
   ],
   "video_permission": {
@@ -45,16 +91,61 @@
     "license_document_audited": false
   },
   "publication": {
-    "spotlight_article_published": false,
-    "spotlight_article_url": null,
+    "spotlight_article_published": true,
+    "spotlight_article_url": "https://modelscope.cn/posts/437111",
     "official_creation_entry": "https://modelscope.cn/learn/create",
-    "native_video_upload_support": "component_requirements_verified_upload_incomplete",
-    "native_video_formats": ["mp4", "mov", "webm"],
+    "native_video_upload_support": "component_requirements_verified_upload_failed",
+    "native_video_formats": [
+      "mp4",
+      "mov",
+      "webm"
+    ],
     "native_video_max_size_label": "2G",
-    "last_observed_upload_progress_percent": 67.94,
     "native_video_playback_verified": false,
     "incomplete_media_removed_from_editor": true,
-    "editor_status": "clean_body_restored_next_step_unresponsive",
-    "draft_save_confirmed": null
+    "editor_status": "article_published_external_media_links_verified",
+    "spotlight_article_title": "渐记｜让 AI 更了解你，也让你更了解自己",
+    "published_on": "2026-10-05",
+    "associated_studio": "Cy189789/jianji",
+    "anonymous_verification_status": "passed",
+    "native_video_embedded": false,
+    "native_images_displayed_on_public_page": false,
+    "native_image_embedding_verified": false,
+    "image_external_links_status": "public_dom_verified",
+    "cover_upload_success": false,
+    "cover_type": "platform_default",
+    "cover_asset": "learn_cyan.png",
+    "test_text_removed": true,
+    "native_video_attempts": [
+      {
+        "file": "jianji-promo-v4-creative-minds-2026-10-05.mp4",
+        "final_observed_progress_percent": 88.5,
+        "uploaded": false,
+        "error": "Uncaught (in promise) undefined"
+      },
+      {
+        "file": "jianji-promo-upload.mp4",
+        "uploaded": false,
+        "transfer_started": false,
+        "component_recreated": true,
+        "editor_saved_and_reloaded": true,
+        "error": "upload_error_no_transfer"
+      }
+    ],
+    "anonymous_http_verified": true,
+    "anonymous_http_status": 200,
+    "canonical_redirect_url": "https://modelscope.cn/posts/437111",
+    "html_article_title_verified": true,
+    "html_verified_markers": {
+      "jianji-poster.png": true,
+      "jianji-product-story.png": true,
+      "jianji-promo-v4-creative-minds-2026-10-05.mp4": true,
+      "cy189789-jianji.ms.show": true,
+      "qwen3.8-flash": true
+    },
+    "anonymous_http_checked_at": "2026-10-04T23:28:05.555080+00:00",
+    "public_dom_verified": true,
+    "initial_published_detail_url": "https://modelscope.cn/learn/437111",
+    "initial_detail_redirect_status": 301
   }
 }

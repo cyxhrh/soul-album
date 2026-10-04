@@ -43,7 +43,7 @@
 | 公开 Demo 入口（补充） | https://cyxhrh.github.io/soul-album/ ，默认进入评委模式。 |
 | 源代码 / 提交材料 | [源码分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration) · [提交材料](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration/docs/submission/2026-10-05) · [下载包](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05) |
 | 模型、数据集、Notebook、MCP、Skill（选填） | 仅填写已有且可公开核查的对应材料。未发布这些资源时留空，不借用与作品无关的链接。 |
-| 实践内容（选填） | [图文视频发布包](spotlight/README.md)已准备，魔搭文章尚未发布。发布后填平台生成的 Spotlight 文章地址；此处不填视频下载链接或创空间应用链接。 |
+| 实践内容（选填） | https://modelscope.cn/posts/437111 。文章已发布，公开正文与匿名 HTTP 已核对，规范地址返回 200；两图提供 GitHub 文件链接，完整原片提供下载链接，没有内嵌图片或视频。详见 [发布记录](spotlight/README.md)；此字段不填视频下载链接或创空间应用链接。 |
 
 队友提交前须在未登录浏览器中检查创空间权限及体验入口。真实实验记录目前只有保存的文本输入与响应，没有原始请求／响应截图；如补充截图，需能核查且不包含密钥。
 

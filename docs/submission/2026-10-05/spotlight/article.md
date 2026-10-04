@@ -6,7 +6,7 @@
 
 **渐记日常，渐见自己。**
 
-![渐记产品宣传图](assets/jianji-poster.png)
+[查看渐记产品宣传图](https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-poster.png)
 
 当前在线 Demo 展示对话记录、原话核对、理解修订、画册回看与日常数据。点击五次“发送”即可完成体验。对话与数据均为合成预设示例，回复不实时生成，尚未接入真实设备或账单。
 
@@ -14,15 +14,13 @@
 
 后续将结合过往记录，提出情绪与行为变化的线索，由用户确认和修正；逐步接入经授权的手机、穿戴和办公记录。持续跨日模型检索与真实设备接入仍在后续开发计划中。
 
-![渐记产品长图：对话、画册与日常数据](assets/jianji-product-story.png)
+[查看产品长图：对话、画册与日常数据](https://github.com/cyxhrh/soul-album/blob/codex/teammate-frontend-integration/docs/submission/2026-10-05/spotlight/assets/jianji-product-story.png)
 
 渐记宣传片 · 90 秒 · 1920 × 1080
 
-<!-- 发布时在此处使用魔搭原生视频组件插入用户已授权的原片；以下 GitHub 链接保留作备用下载。 -->
-
 宣传图为产品设计展示，视频包含界面演示与合成情境。当前完成程度以在线 Demo、源码与实验记录为准。
 
-[宣传片备用下载](https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-promo-v4-creative-minds-2026-10-05.mp4)
+[下载完整宣传片（90 秒）](https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-promo-v4-creative-minds-2026-10-05.mp4)
 
 [直接体验渐记](https://cy189789-jianji.ms.show/) · [魔搭创空间项目页](https://modelscope.cn/studios/Cy189789/jianji)
 
