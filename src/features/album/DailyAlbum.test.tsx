@@ -12,7 +12,7 @@ it('keeps a full long original on the reverse without calling a model to flip', 
   vi.stubGlobal('fetch', fetcher)
   const record = createDailyRecord('2026-09-30', [{ ...message, text: '长'.repeat(900) + '最后其实很开心。' }])
   render(<DailyAlbum record={record} onSave={vi.fn()} modelReady />)
-  fireEvent.click(screen.getByRole('button', { name: '记录背面' }))
+  fireEvent.click(screen.getByRole('button', { name: '原话与理解' }))
   expect(screen.getByText(/最后其实很开心/)).toBeVisible()
   expect(fetcher).not.toHaveBeenCalled()
 })
@@ -65,6 +65,6 @@ it('rejects a malformed portrait without writing it to the archive', async () =>
 
 it('shows archived times in the space timezone instead of presenting UTC as local time', () => {
   render(<DailyAlbum record={createDailyRecord('2026-09-30', [message])} onSave={vi.fn()} modelReady={false} timezone="Asia/Shanghai" />)
-  fireEvent.click(screen.getByRole('button', { name: '记录背面' }))
+  fireEvent.click(screen.getByRole('button', { name: '原话与理解' }))
   expect(screen.getByText('2026/09/30 17:00')).toBeVisible()
 })

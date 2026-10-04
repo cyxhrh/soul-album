@@ -69,7 +69,7 @@ test('one composer sends three natural turns automatically with bounded context 
   await page.screenshot({ path: 'test-results/private-chat-auto-three-turns-1440.png' })
 
   await page.getByRole('button', { name: '画册' }).click()
-  await page.getByRole('button', { name: '记录背面', exact: true }).click()
+  await page.getByRole('button', { name: '原话与理解', exact: true }).click()
   const album = page.locator('.daily-album')
   await expect(album).toContainText('今天走了很远的路。')
   await expect(album).toContainText('听起来你走了不少路。')

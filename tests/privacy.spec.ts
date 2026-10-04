@@ -72,7 +72,7 @@ test('control messages stay in the conversation but never create an empty diary 
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天先不聊了')
   await album(page)
   await expect(page.locator('.daily-status')).toHaveText('原话已收录')
-  await page.getByRole('button', { name: '记录背面', exact: true }).click()
+  await page.getByRole('button', { name: '原话与理解', exact: true }).click()
   await expect(page.locator('.daily-message-user').last()).toContainText('今天先不聊了')
 })
 

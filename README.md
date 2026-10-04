@@ -1,5 +1,7 @@
 # 渐知 · 产品 Demo 与本地后端核心
 
+**2026-10-04 最新评委体验**在 [`codex/teammate-frontend-integration` 分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration)。队友先看[本次交接与体验入口](docs/handoff/teammate-frontend-2026-10-04.md)，启动后打开 `/?demo=judge`：五轮预设对话、画册目录与正反面、下一次见面、知知表情，以及步数／静息心率／消费的日常页。原通话、语音输入和伙伴选择界面均保留；所有评委体验内容使用合成数据，无需后端或模型密钥。
+
 “每天问一点，慢慢看见自己”。打开应用即进入对话：首页用气泡消息记录日常，画册翻看已有记录，生活数据页展示逐项开启的模拟图表。这个阶段先确认产品本身的交互与功能，暂不制作作品介绍页。
 
 在线体验：[GitHub Pages 前端 Demo](https://cyxhrh.github.io/soul-album/)；队友可从[公开源码仓库](https://github.com/cyxhrh/soul-album)获取代码。

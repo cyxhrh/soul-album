@@ -1,5 +1,42 @@
 import { test, expect } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 import { DEMO_ROUNDS } from '../src/features/judge/judgeScript'
+
+test('animates each arriving bubble once and respects reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.addInitScript(() => {
+    const state = window as Window & { messageEntrances: string[] }
+    state.messageEntrances = []
+    document.addEventListener('animationstart', event => {
+      if (event.animationName === 'judge-message-in') state.messageEntrances.push((event.target as HTMLElement).textContent ?? '')
+    })
+  })
+  const entrances = () => page.evaluate(() => (window as Window & { messageEntrances: string[] }).messageEntrances)
+  await page.goto('/?demo=judge')
+  expect(await entrances()).toEqual([])
+  for (const round of DEMO_ROUNDS.slice(0, 2)) {
+    await page.getByRole('button', { name: '发送', exact: true }).click()
+    for (const reply of round.replies) await expect(page.getByRole('region', { name: '对话记录' }).getByText(reply, { exact: true })).toBeVisible()
+    await expect(page.locator('.judge-message-enter')).toHaveCount(0)
+  }
+  const expected = DEMO_ROUNDS.slice(0, 2).flatMap(round => [round.user, ...round.replies])
+  expect(await entrances()).toEqual(expected)
+  await page.getByRole('button', { name: '画册', exact: true }).click()
+  await page.getByRole('button', { name: '对话', exact: true }).click()
+  await page.getByLabel('选择伙伴', { exact: true }).click()
+  await page.getByRole('button', { name: '小笺，女性形象' }).click()
+  await page.getByRole('button', { name: '语音对话', exact: true }).click()
+  await page.getByRole('button', { name: '退出语音通话' }).click()
+  expect(await entrances()).toEqual(expected)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  for (const reply of DEMO_ROUNDS[2].replies) {
+    const bubble = page.getByRole('region', { name: '对话记录' }).getByText(reply, { exact: true }).locator('..')
+    await expect(bubble).toBeVisible()
+    await expect(bubble).toHaveCSS('animation-name', 'none')
+  }
+  expect(await entrances()).toEqual(expected)
+})
 
 test('judge flow works without APIs, updates both album faces, downloads Markdown and replays', async ({ page }) => {
   const apiCalls: string[] = []
@@ -9,19 +46,31 @@ test('judge flow works without APIs, updates both album faces, downloads Markdow
   await page.goto('/?demo=judge')
   const composer = page.getByRole('textbox', { name: '预设消息' })
   await expect(composer).toHaveAttribute('readonly', '')
-  await expect(page.getByText('预设示例', { exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: '对话记录' }).getByText('预设示例', { exact: true })).toBeVisible()
   for (const round of DEMO_ROUNDS) {
     await expect(composer).toHaveValue(round.user)
     await page.getByRole('button', { name: '发送', exact: true }).click()
     await expect(page.getByRole('button', { name: '发送', exact: true })).toBeDisabled()
-    await expect(page.getByRole('region', { name: '对话记录' })).toContainText(round.reply)
+    for (const reply of round.replies) await expect(page.getByRole('region', { name: '对话记录' }).getByText(reply, { exact: true })).toBeVisible()
+    if (round === DEMO_ROUNDS[1]) {
+      await page.getByRole('button', { name: '查看 10月1日的原话' }).click()
+      await expect(page.getByRole('dialog', { name: '这句话的来处' })).toContainText('昨天聚会很开心，返程过了零点。今天起床很累。')
+      await page.getByRole('button', { name: '回到阅读' }).click()
+      await expect(composer).toHaveValue(DEMO_ROUNDS[2].user)
+    }
   }
   await page.getByRole('button', { name: '查看画册', exact: true }).click()
-  await expect(page.getByRole('region', { name: '每日画册' })).toContainText('和朋友相处带来的是开心')
-  await page.getByRole('button', { name: '记录背面' }).click()
-  await expect(page.getByRole('region', { name: '今日肖像' })).toContainText('撤回“聚会本身耗力”的猜测')
-  await page.getByText('查看原话依据', { exact: true }).click()
-  await expect(page.locator('.daily-observation blockquote').last()).toHaveText(DEMO_ROUNDS[2].user)
+  await expect(page.getByRole('region', { name: '每日画册' })).toContainText('跟朋友待着其实很放松')
+  await expect(page.getByRole('region', { name: '每日画册' })).toContainText('那一刻，觉得自己没在一个人闷头折腾')
+  await page.getByRole('button', { name: '原话与理解' }).click()
+  await expect(page.getByRole('region', { name: '今日肖像' })).toContainText('撤回“聊天时提着劲、聚会耗神”的猜测')
+  await page.getByText('更多观察与原话依据', { exact: true }).click()
+  const correction = page.locator('.daily-observation').filter({ hasText: '撤回' })
+  await correction.getByText('查看原话依据', { exact: true }).click()
+  await expect(correction.locator('blockquote').last()).toHaveText(DEMO_ROUNDS[2].user)
+  const understanding = page.locator('.daily-observation').filter({ hasText: '用户已确认' })
+  await understanding.getByText('查看原话依据', { exact: true }).click()
+  await expect(understanding.locator('blockquote').last()).toHaveText(DEMO_ROUNDS[3].user)
   await page.getByText('查看 Markdown 源文件').click()
   await expect(page.locator('.judge-markdown pre')).toContainText(DEMO_ROUNDS[2].user)
   const downloadPromise = page.waitForEvent('download')
@@ -29,7 +78,38 @@ test('judge flow works without APIs, updates both album faces, downloads Markdow
   const download = await downloadPromise
   expect(download.suggestedFilename()).toBe('渐知-示例-2026-10-04.md')
   expect(await download.failure()).toBeNull()
-  await page.getByRole('button', { name: '09.28' }).click()
+  const saved = await download.path()
+  const markdown = await readFile(saved!, 'utf8')
+  expect(markdown).toContain('理解修订记录')
+  expect(markdown).toContain('具体原因尚未确定')
+  expect(markdown).toContain(DEMO_ROUNDS[2].user)
+  await page.getByRole('button', { name: '体验下一次见面' }).click()
+  await expect(composer).toHaveAttribute('readonly', '')
+  await page.getByRole('button', { name: '查看昨天修正后的原话' }).click()
+  await expect(page.getByRole('dialog', { name: '这句话的来处' })).toContainText(DEMO_ROUNDS[3].user)
+  await page.getByRole('button', { name: '回到阅读' }).click()
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(page.getByRole('button', { name: '查看画册', exact: true })).toBeVisible()
+  await page.locator('.judge-message-enter').waitFor({ state: 'hidden' })
+  await page.getByRole('button', { name: '← 回看昨天的对话' }).click()
+  await expect(page.locator('.judge-message-enter')).toHaveCount(0)
+  await page.getByRole('button', { name: '接着下一次见面 ↗' }).click()
+  await expect(page.locator('.judge-message-enter')).toHaveCount(0)
+  await page.getByRole('button', { name: '查看画册', exact: true }).click()
+  await expect(page.getByRole('region', { name: '每日画册' })).toContainText('先做一点，再慢慢改')
+  await page.getByRole('button', { name: '原话与理解' }).click()
+  await page.getByText('完整对话 · 4 条', { exact: true }).click()
+  await expect(page.getByRole('region', { name: '每日画册' }).locator('.daily-message')).toHaveCount(4)
+  await page.getByRole('button', { name: '详情', exact: false }).click()
+  await page.getByText('AI 技术实践 · 查看一次真实千问实验', { exact: true }).click()
+  await expect(page.getByRole('region', { name: '真实 AI 实践记录' })).toBeVisible()
+  const experimentResponse = await page.request.get('/evidence/qwen-synthetic-trial-2026-09-29.md')
+  expect(experimentResponse.ok()).toBe(true)
+  expect(await experimentResponse.text()).toContain('2026-09-29T10:26:44.613Z')
+  await page.getByRole('button', { name: '知道了' }).click()
+  await page.getByRole('button', { name: '← 返回十月目录' }).click()
+  await page.getByRole('button', { name: '2026年9月', exact: true }).click()
+  await page.getByRole('button', { name: '阅读 2026年9月28日的记录' }).click()
   await expect(page.getByRole('region', { name: '每日画册' })).toContainText('走到天黑，刚刚好')
   await page.getByRole('button', { name: '重新体验' }).click()
   await expect(composer).toHaveValue(DEMO_ROUNDS[0].user)
@@ -46,9 +126,10 @@ test('mobile chat and archive fit the viewport and keep the send action accessib
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeInViewport()
   await page.getByRole('button', { name: '发送', exact: true }).click()
   await page.getByRole('button', { name: '画册', exact: true }).click()
-  await page.getByRole('button', { name: '记录背面' }).click()
+  await page.getByRole('button', { name: '回到今天 ↗' }).click()
+  await page.getByRole('button', { name: '原话与理解' }).click()
   await expect(page.getByRole('region', { name: '每日画册' })).toContainText(DEMO_ROUNDS[0].reply)
-  for (const button of ['记录背面', '日记正面', '前一页', '后一页']) {
+  for (const button of ['原话与理解', '日常小记', '上一条记录', '下一条记录']) {
     await page.getByRole('button', { name: button, exact: false }).click()
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)

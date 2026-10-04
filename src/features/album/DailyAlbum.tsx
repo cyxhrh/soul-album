@@ -120,9 +120,9 @@ export default function DailyAlbum({ record, onSave, modelReady, sample = false,
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso))
   return <article className={`daily-album daily-album-${side}`} aria-label={`${record.date}每日画册`}>
     <div className="daily-toolbar screen-only">
-      <div className="daily-face-switch" role="group" aria-label="画册正反面">
-        <button type="button" aria-pressed={side === 'front'} disabled={editing !== null} onClick={() => setSide('front')}>日记正面</button>
-        <button type="button" aria-pressed={side === 'back'} disabled={editing !== null} onClick={() => setSide('back')}>记录背面</button>
+      <div className="daily-face-switch" role="group" aria-label="画册阅读方式">
+        <button type="button" aria-pressed={side === 'front'} disabled={editing !== null} onClick={() => setSide('front')}>日常小记</button>
+        <button type="button" aria-pressed={side === 'back'} disabled={editing !== null} onClick={() => setSide('back')}>原话与理解</button>
       </div>
       <span className="daily-status">{sample ? '合成示例' : record.userEdited ? '已手动修订' : record.generatedAt ? '已整理' : '原话已收录'}</span>
     </div>

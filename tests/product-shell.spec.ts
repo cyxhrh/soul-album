@@ -86,7 +86,7 @@ test('private album opens as a two-page book and turns only between recorded day
 
   await page.setViewportSize({ width: 320, height: 568 })
   await expect(page.locator('.album-book-page-left')).toBeHidden()
-  await book.getByRole('button', { name: '记录背面', exact: true }).click()
+  await book.getByRole('button', { name: '原话与理解', exact: true }).click()
   await book.getByText('档案信息', { exact: true }).click()
   await expect(book.locator('.daily-file-info')).toContainText('本机浏览器中的记录')
   const toolEntry = page.locator('.product-album-tools > summary')
@@ -317,7 +317,7 @@ test('one message composer keeps control phrases as conversations without derivi
   await send.click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天先不聊了')
   await page.getByRole('button', { name: '画册' }).click()
-  await page.getByRole('button', { name: '记录背面', exact: true }).click()
+  await page.getByRole('button', { name: '原话与理解', exact: true }).click()
   await expect(page.locator('.daily-message-user').last()).toContainText('今天先不聊了')
   await expect(page.locator('.daily-status')).toHaveText('原话已收录')
 })
