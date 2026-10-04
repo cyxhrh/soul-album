@@ -6,12 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:backend": "tsc -p tsconfig.backend.json",
+    "demo:backend": "npm run build:backend && node dist-backend/backend/demo.js",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

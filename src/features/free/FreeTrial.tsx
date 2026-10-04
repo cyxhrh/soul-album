@@ -1,12 +1,13 @@
-import { useLayoutEffect, useReducer, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import {
   cadenceForDay, changeCadence, createInvitationState, isInvitationDue,
   markInvitationShown, pauseInvitations, resumeInvitations, settleInvitation,
   shareProactively, type Cadence, type InvitationState,
 } from '../../domain/invitations'
-import { createJournalState, journalReducer, titleDaysAffectedByEntryChange, type Entry } from '../../domain/journal'
+import { titleDaysAffectedByEntryChange, type Entry } from '../../domain/journal'
+import { createBrowserLocalSession } from '../../domain/browserLocalSession'
 import { classifyChatIntent } from '../../domain/chatIntent'
-import { selectAlbum, selectAnsweredQuestions, selectComparison, selectRuleQuestion } from '../../domain/selectors'
+import { selectAlbum, selectAnsweredQuestions, selectComparison } from '../../domain/selectors'
 import AlbumPage from '../album/AlbumPage'
 import DataInsights, { type BehaviorConsents, type BehaviorSource } from '../data/DataInsights'
 import '../../styles/product.css'
@@ -19,22 +20,9 @@ type EntryChange =
   | { kind: 'editEntry'; id: string; text: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
   | { kind: 'deleteEntry'; id: string; affectedTitleDays: number[]; preflightUpdated?: boolean }
 type ProductTab = 'chat' | 'album' | 'data'
-type ControlPrompt = { kind: 'fixed'; text: string } |
-  { kind: 'entry'; id: string; revision: number } |
-  { kind: 'observation'; id: string; revision: number }
-type ControlExchange = { id: string; day: number; order: number; text: string; reply: string; prompt?: ControlPrompt }
+type ControlExchange = { id: string; reply: string; promptQuestionId?: string }
 type TimelineItem = { kind: 'entry'; order: number; entry: Entry } |
-  { kind: 'control'; order: number; exchange: ControlExchange }
-
-function localIsoNow(): string {
-  const now = new Date()
-  const offset = -now.getTimezoneOffset()
-  const local = new Date(now.getTime() + offset * 60_000).toISOString().slice(0, 19)
-  const sign = offset >= 0 ? '+' : '-'
-  const hours = String(Math.floor(Math.abs(offset) / 60)).padStart(2, '0')
-  const minutes = String(Math.abs(offset) % 60).padStart(2, '0')
-  return `${local}${sign}${hours}:${minutes}`
-}
+  { kind: 'control'; order: number; exchange: ControlExchange; text: string }
 
 function nextDueDay(state: InvitationState, afterDay: number): number | null {
   for (let future = afterDay + 1; future <= afterDay + 28; future++) {
@@ -44,7 +32,9 @@ function nextDueDay(state: InvitationState, afterDay: number): number | null {
 }
 
 function FreeSession({ onReset }: { onReset: () => void }) {
-  const [journal, dispatch] = useReducer(journalReducer, 'free', createJournalState)
+  const [session] = useState(() => createBrowserLocalSession())
+  const [snapshot, setSnapshot] = useState(() => session.read())
+  const journal = session.projectJournal(snapshot)
   const [activeTab, setActiveTab] = useState<ProductTab>('chat')
   const [controlExchanges, setControlExchanges] = useState<ControlExchange[]>([])
   const [consents, setConsents] = useState<BehaviorConsents>({ steps: false, spending: false, screenTime: false })
@@ -52,11 +42,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [day, setDay] = useState(1)
   const [viewedDay, setViewedDay] = useState(1)
   const [questionIndex, setQuestionIndex] = useState(0)
-  const [firstQuestionSkipped, setFirstQuestionSkipped] = useState(false)
   const [answeredInRound, setAnsweredInRound] = useState(false)
   const [extraQuestion, setExtraQuestion] = useState(false)
   const [thirdUsed, setThirdUsed] = useState(false)
-  const [questionAnchor, setQuestionAnchor] = useState<ControlPrompt | null>(null)
+  const [activeQuestionId, setActiveQuestionId] = useState<string | null>(session.firstQuestionId)
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
@@ -66,7 +55,6 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const [status, setStatus] = useState('')
   const [printPending, setPrintPending] = useState(false)
   const [pendingEntryChange, setPendingEntryChange] = useState<EntryChange | null>(null)
-  const nextEntryId = useRef(1)
   const printDialogRef = useRef<HTMLDialogElement>(null)
   const printOpenerRef = useRef<HTMLElement | null>(null)
   const titleConfirmRef = useRef<HTMLDialogElement>(null)
@@ -172,11 +160,8 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const roundClosed = invitation.settledDays.includes(day)
   const due = isInvitationDue(invitation, day) && !roundClosed
   const questionCount = cadence === 'weekly' ? 1 : 2
-  const question = selectRuleQuestion(journal, day)
-  const secondAfterSkipPrompt = '今天有没有一个小瞬间想留在画册里？'
-  const useSecondAfterSkipPrompt = !extraQuestion && questionIndex === 1 && firstQuestionSkipped
-  const visibleQuestionText = useSecondAfterSkipPrompt ? secondAfterSkipPrompt :
-    questionAnchor ? controlPromptText(questionAnchor, day) : question.text
+  const activeQuestion = snapshot.questions.find((question) => question.id === activeQuestionId)
+  const visibleQuestionText = activeQuestion?.text ?? ''
   const recordedDays = [...new Set(journal.entries.map((entry) => entry.day))]
     .sort((first, second) => first - second)
   const albumDay = recordedDays.includes(viewedDay) ? viewedDay : recordedDays.at(-1) ?? day
@@ -192,60 +177,36 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   const answeredQuestions = selectAnsweredQuestions(journal, albumDay)
     .filter((item) => !journal.entries.find((entry) => entry.id === item.answerEntryId)?.topicId.startsWith('proactive-day-'))
   const todayQuestions = selectAnsweredQuestions(journal, day)
-  const todayEntries = journal.entries.filter((entry) => entry.day === day)
-  const todayTimeline: TimelineItem[] = [
-    ...todayEntries.map((entry) => ({ kind: 'entry' as const, order: Number(entry.id.slice(5)), entry })),
-    ...controlExchanges.filter((exchange) => exchange.day === day)
-      .map((exchange) => ({ kind: 'control' as const, order: exchange.order, exchange })),
-  ].sort((first, second) => first.order - second.order)
+  const entryById = new Map(journal.entries.map((entry) => [entry.id, entry]))
+  const controlsById = new Map(controlExchanges.map((exchange) => [exchange.id, exchange]))
+  const todayTimeline: TimelineItem[] = session.projectMessages(snapshot)
+    .filter((message) => session.dayForTimestamp(message.occurredAt) === day)
+    .flatMap((message): TimelineItem[] => {
+      if (message.entryId) {
+        const entry = entryById.get(message.entryId)
+        return entry ? [{ kind: 'entry' as const, order: message.sequence, entry }] : []
+      }
+      const exchange = controlsById.get(message.id)
+      return exchange ? [{ kind: 'control' as const, order: message.sequence, exchange, text: message.text }] : []
+    })
 
   useLayoutEffect(() => {
     if (activeTab !== 'chat' || !chatScrollRef.current) return
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
   }, [activeTab, day, journal.entries.length, controlExchanges.length, questionIndex, extraQuestion])
 
-  function record(text: string, note: boolean, citationEntryId?: string, fixedPrompt?: string) {
-    const now = localIsoNow()
-    dispatch({
-      type: 'answer', citationEntryId, fixedPrompt,
-      entry: {
-        id: `free-${nextEntryId.current++}`, day,
-        topicId: note ? `proactive-day-${day}` : 'daily-note',
-        text: text.trim(),
-        occurredAt: now, recordedAt: now, source: '本次页面对话',
-      },
-    })
-    setViewedDay(day)
+  function refresh() {
+    setSnapshot(session.read())
   }
 
-  function currentControlPrompt(): ControlPrompt {
-    if (useSecondAfterSkipPrompt) return { kind: 'fixed', text: secondAfterSkipPrompt }
-    if (questionAnchor) return questionAnchor
-    if (question.citationEntryId) return {
-      kind: 'entry', id: question.citationEntryId, revision: question.citationEntryRevision ?? 1,
-    }
-    if (question.citationObservationId) return {
-      kind: 'observation', id: question.citationObservationId, revision: question.citationObservationRevision ?? 1,
-    }
-    return { kind: 'fixed', text: question.text }
+  function showQuestion(targetDay: number, moment = false) {
+    const next = session.displayNextQuestion(targetDay, moment)
+    setActiveQuestionId(next.id)
+    refresh()
   }
 
-  function controlPromptText(prompt: ControlPrompt, promptDay: number): string {
-    if (prompt.kind === 'fixed') return prompt.text
-    if (prompt.kind === 'entry') {
-      const entry = journal.entries.find((candidate) => candidate.id === prompt.id)
-      return entry && entry.revision === prompt.revision
-        ? selectRuleQuestion(journal, promptDay, entry.id).text : '这道题引用的原话已有变动，旧提问已撤下。'
-    }
-    const observation = journal.observations.find((candidate) => candidate.id === prompt.id)
-    return observation && observation.revision === prompt.revision
-      ? `你补充说“${observation.text}”。今天还有什么想记下的？`
-      : '这道题引用的观察已有变动，旧提问已撤下。'
-  }
-
-  function logControl(text: string, reply: string, prompt?: ControlPrompt) {
-    const order = nextEntryId.current++
-    setControlExchanges((current) => [...current, { id: `control-${order}`, day, order, text, reply, prompt }])
+  function logControl(id: string, reply: string, promptQuestionId?: string) {
+    setControlExchanges((current) => [...current, { id, reply, promptQuestionId }])
   }
 
   function finishRound(answered: boolean) {
@@ -258,35 +219,33 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       : answered ? '今天的记录已写入画册。' : '今天先到这里；你想聊随时来。')
   }
 
-  function answerQuestion(text: string) {
-    const prompt = currentControlPrompt()
-    if (prompt.kind === 'fixed') record(text, false, undefined, prompt.text)
-    else if (prompt.kind === 'entry') {
-      const original = journal.entries.find((entry) => entry.id === prompt.id && entry.revision === prompt.revision)
-      record(text, false, original?.id, original ? undefined : '今天有什么想记下的？')
-    } else record(text, false, undefined, questionAnchor ? '今天有什么想记下的？' : undefined)
-    setQuestionAnchor(null)
+  function answerQuestion() {
     if (extraQuestion) {
       setExtraQuestion(false)
+      setActiveQuestionId(null)
       setThirdUsed(true)
       setInvitation(shareProactively(invitation))
       setStatus('主动补充已写入今天的画册。')
       return
     }
     if (questionIndex + 1 < questionCount) {
-      if (questionIndex === 0) setFirstQuestionSkipped(false)
       setQuestionIndex((index) => index + 1)
       setAnsweredInRound(true)
-    } else finishRound(true)
+      showQuestion(day)
+    } else {
+      setActiveQuestionId(null)
+      finishRound(true)
+    }
   }
 
   function skipQuestion() {
-    setQuestionAnchor(null)
     if (questionIndex + 1 < questionCount) {
-      if (questionIndex === 0) setFirstQuestionSkipped(true)
       setQuestionIndex((index) => index + 1)
+      showQuestion(day, true)
+    } else {
+      setActiveQuestionId(null)
+      finishRound(answeredInRound)
     }
-    else finishRound(answeredInRound)
   }
 
   function viewRecordedDay(target: number) {
@@ -307,17 +266,15 @@ function FreeSession({ onReset }: { onReset: () => void }) {
     setInvitation(next)
     setDay(target)
     setQuestionIndex(0)
-    setFirstQuestionSkipped(false)
     setAnsweredInRound(false)
     setExtraQuestion(false)
     setThirdUsed(false)
-    setQuestionAnchor(null)
+    if (isInvitationDue(next, target)) showQuestion(target)
+    else setActiveQuestionId(null)
     setStatus(draft.trim() ? `未发送的消息仍在输入框中；发送后会记入第 ${target} 天。` : '')
   }
 
-  function share(text: string) {
-    if (due || extraQuestion) setQuestionAnchor(currentControlPrompt())
-    record(text, true)
+  function share() {
     setInvitation(shareProactively(invitation))
     setAnsweredInRound(true)
     setStatus('这句话已写入今天的画册；邀请节奏从这里重新计算。')
@@ -326,24 +283,32 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   function sendMessage() {
     const text = draft.trim()
     if (!text) return
-    setDraft('')
     const intent = classifyChatIntent(text)
+    const promptId = due || extraQuestion ? activeQuestionId : null
+    let result: ReturnType<typeof session.sendMessage>
+    try {
+      result = session.sendMessage(day, text, promptId)
+    } catch {
+      setStatus('这句话暂时没有保存，请重试。')
+      return
+    }
+    setDraft('')
+    refresh()
+    if (result.entry) setViewedDay(day)
     if (intent === 'skip' || intent === 'decline') {
       if (extraQuestion) {
-        const prompt = currentControlPrompt()
         setExtraQuestion(false)
-        setQuestionAnchor(null)
+        setActiveQuestionId(null)
         setThirdUsed(true)
         setStatus('主动加问已收起；今天的邀请结算不变。')
-        logControl(text, '好，这道加问就停在这里。想记什么仍可以直接说。', prompt)
+        logControl(result.message.id, '好，这道加问就停在这里。想记什么仍可以直接说。', promptId ?? undefined)
       } else if (due) {
-        const prompt = currentControlPrompt()
         const firstSkip = intent === 'skip' && questionIndex + 1 < questionCount
         if (intent === 'skip') skipQuestion()
-        else { setQuestionAnchor(null); finishRound(answeredInRound) }
-        logControl(text, firstSkip ? '好，换一个轻一点的问题。' : '好，今天先到这里。你想说时随时来。', prompt)
+        else { setActiveQuestionId(null); finishRound(answeredInRound) }
+        logControl(result.message.id, firstSkip ? '好，换一个轻一点的问题。' : '好，今天先到这里。你想说时随时来。', promptId ?? undefined)
       } else {
-        logControl(text, '今天没有待答的问题；想记什么可以直接告诉我。')
+        logControl(result.message.id, '今天没有待答的问题；想记什么可以直接告诉我。')
       }
       return
     }
@@ -352,16 +317,16 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         !thirdUsed && !invitation.paused
       if (canAskThird) {
         setExtraQuestion(true)
-        setQuestionAnchor(null)
-        logControl(text, '好，再聊一件事。')
+        showQuestion(day)
+        logControl(result.message.id, '好，再聊一件事。')
       } else {
-        logControl(text, due || extraQuestion ? '现在还有一个问题在这里；你可以直接继续说。' :
+        logControl(result.message.id, due || extraQuestion ? '现在还有一个问题在这里；你可以直接继续说。' :
           '今天没有新的加问；想记什么可以直接告诉我。')
       }
       return
     }
-    if (intent === 'share' || (!due && !extraQuestion)) share(text)
-    else answerQuestion(text)
+    if (intent === 'share' || (!due && !extraQuestion)) share()
+    else answerQuestion()
   }
 
   function applyEntryChange(change: EntryChange) {
@@ -377,14 +342,23 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       setStatus('这条原话已不存在，请重新选择。')
       return
     }
-    if (change.kind === 'editEntry') {
-      dispatch({ type: 'editEntry', id: change.id, text: change.text, recordedAt: localIsoNow() })
-    } else dispatch({ type: 'deleteEntry', id: change.id })
+    try {
+      if (change.kind === 'editEntry') session.editEntry(change.id, change.text)
+      else session.deleteEntry(change.id)
+      const currentQuestion = session.read().questions.find((question) => question.id === activeQuestionId)
+      if ((due || extraQuestion) && currentQuestion && currentQuestion.status !== 'ready') {
+        showQuestion(day)
+      } else refresh()
+    } catch {
+      setPendingEntryChange(null)
+      setStatus('记录已变化，请重新选择后再试。')
+      return
+    }
     if (pendingEntryChange) titleConfirmFocusReturnRef.current = 'status'
     setPendingEntryChange(null)
     setEditingId(null)
     setEditDraft('')
-    if (change.kind === 'deleteEntry') {
+    if (change.kind === 'deleteEntry' || affectedTitleDays.includes(albumDay)) {
       setEditingTitle(false)
       setTitleDraft('')
     }
@@ -414,7 +388,18 @@ function FreeSession({ onReset }: { onReset: () => void }) {
 
   function saveTitle() {
     if (!titleDraft.trim()) return
-    dispatch({ type: 'setTitle', day: albumDay, title: titleDraft.trim(), recordedAt: localIsoNow() })
+    if (album?.title === titleDraft.trim()) {
+      setEditingTitle(false)
+      setTitleDraft('')
+      return
+    }
+    try {
+      session.setDayTitle(albumDay, titleDraft.trim())
+      refresh()
+    } catch {
+      setStatus('标题没有保存，请重试。')
+      return
+    }
     setEditingTitle(false)
     setTitleDraft('')
     setStatus('日页标题已修订。')
@@ -468,7 +453,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
           <div><p className="product-overline">心灵画册 / {activeTab === 'chat' ? '日常对话' : activeTab === 'album' ? '我的画册' : '生活数据'}</p>
             {activeTab !== 'data' && <h1>{activeTab === 'chat' ? '聊聊今天' : '翻开画册'}</h1>}</div>
           <div className="product-header-meta">
-            <span>第 {day} 天 · {cadenceLabel[cadence]}{invitation.paused && ' · 已暂停'}</span>
+            <span>第 {day} 天 · 演示日期 {session.dateForDay(day)} · {cadenceLabel[cadence]}{invitation.paused && ' · 已暂停'}</span>
             <span>规则模式 · 仅本次页面</span>
             <button type="button" onClick={onReset} aria-label="清除本次内容">清除</button>
           </div>
@@ -481,12 +466,12 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               <div className="product-thread">
                 {todayTimeline.map((item) => {
                   if (item.kind === 'control') return <div className="product-exchange" key={item.exchange.id}>
-                    {item.exchange.prompt && <div className="product-bubble-row agent">
+                    {item.exchange.promptQuestionId && <div className="product-bubble-row agent">
                       <span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><small>心灵画册 · 当时的问题</small>
-                        <p>{controlPromptText(item.exchange.prompt, item.exchange.day)}</p></div>
+                        <p>{snapshot.questions.find((question) => question.id === item.exchange.promptQuestionId)?.text ?? '旧提问已撤下。'}</p></div>
                     </div>}
-                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.exchange.text}</p></div></div>
+                    <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p></div></div>
                     <div className="product-bubble-row agent"><span className="product-avatar" aria-hidden="true">画</span>
                       <div className="product-bubble"><p>{item.exchange.reply}</p></div></div>
                   </div>
@@ -523,7 +508,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
               <div className="product-composer">
                 <div className="product-composer-input">
                   <label htmlFor="free-message">发送消息</label>
-                  <textarea id="free-message" value={draft} onChange={(event) => setDraft(event.target.value)}
+                  <textarea id="free-message" value={draft} maxLength={10000} onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                         event.preventDefault(); sendMessage()
