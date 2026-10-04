@@ -48,6 +48,13 @@
     "spotlight_article_published": false,
     "spotlight_article_url": null,
     "official_creation_entry": "https://modelscope.cn/learn/create",
-    "native_video_upload_support": "not_verified"
+    "native_video_upload_support": "component_requirements_verified_upload_incomplete",
+    "native_video_formats": ["mp4", "mov", "webm"],
+    "native_video_max_size_label": "2G",
+    "last_observed_upload_progress_percent": 67.94,
+    "native_video_playback_verified": false,
+    "incomplete_media_removed_from_editor": true,
+    "editor_status": "clean_body_restored_next_step_unresponsive",
+    "draft_save_confirmed": null
   }
 }
