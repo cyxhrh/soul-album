@@ -2,11 +2,14 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import JudgeDaily from './JudgeDaily'
+import { nextVisitRecord, todayRecord } from './judgeScript'
 
 afterEach(cleanup)
 
 const props = {
   completed: 0,
+  record: todayRecord(0),
+  onSource: vi.fn(),
   companionName: '知知',
   companionSrc: '/brand/zhizhi.png',
   onChat: vi.fn(),
@@ -54,7 +57,7 @@ it('withdraws an open source without leaving values or its chart behind', () => 
 })
 
 it('replaces all hidden data with an empty state instead of zero or a numerical care claim', () => {
-  render(<JudgeDaily {...props} completed={4} />)
+  render(<JudgeDaily {...props} completed={4} record={todayRecord(4)} />)
   sources()
   for (const name of ['显示步数示例', '显示心率示例', '显示消费示例']) {
     fireEvent.click(screen.getByRole('checkbox', { name }))
@@ -62,6 +65,7 @@ it('replaces all hidden data with an empty state instead of zero or a numerical 
   const care = screen.getByRole('region', { name: '知知的一点关心' })
   expect(care).toHaveTextContent('开启一个示例')
   expect(care).not.toHaveTextContent(/昨晚|返程|心里挺亮|\d/)
+  expect(within(care).queryByRole('button', { name: '来自你今天说的话' })).not.toBeInTheDocument()
   expect(screen.getAllByText('未显示')).toHaveLength(3)
   expect(screen.queryByRole('table')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('checkbox', { name: '显示心率示例' }))
@@ -71,17 +75,39 @@ it('replaces all hidden data with an empty state instead of zero or a numerical 
 })
 
 it('only connects the user story after its correction and confirmation have arrived', () => {
-  const { rerender } = render(<JudgeDaily {...props} completed={2} />)
+  const onSource = vi.fn()
+  const { rerender } = render(<JudgeDaily {...props} completed={2} record={todayRecord(2)} onSource={onSource} />)
   const care = screen.getByRole('region', { name: '知知的一点关心' })
   expect(care).not.toHaveTextContent(/你说昨晚|等车又换车|朋友认真听/)
-  rerender(<JudgeDaily {...props} completed={3} />)
+  expect(within(care).queryByRole('button', { name: '来自你今天说的话' })).not.toBeInTheDocument()
+  const corrected = todayRecord(3)
+  rerender(<JudgeDaily {...props} completed={3} record={corrected} onSource={onSource} />)
   expect(care).toHaveTextContent('你说昨晚跟朋友待着很放松')
   expect(care).toHaveTextContent('等车又换车')
   expect(care).not.toHaveTextContent('朋友认真听')
-  rerender(<JudgeDaily {...props} completed={4} />)
+  fireEvent.click(within(care).getByRole('button', { name: '来自你今天说的话' }))
+  expect(onSource).toHaveBeenLastCalledWith(corrected, ['judge-user-3'])
+  const confirmed = todayRecord(4)
+  rerender(<JudgeDaily {...props} completed={4} record={confirmed} onSource={onSource} />)
   expect(care).toHaveTextContent('朋友认真听')
+  fireEvent.click(within(care).getByRole('button', { name: '来自你今天说的话' }))
+  expect(onSource).toHaveBeenLastCalledWith(confirmed, ['judge-user-2', 'judge-user-3', 'judge-user-4'])
   fireEvent.click(screen.getByRole('button', { name: '查看2026年10月3日的日常' }))
   expect(care).not.toHaveTextContent(/你说昨晚|等车又换车|朋友认真听/)
+  expect(within(care).queryByRole('button', { name: '来自你今天说的话' })).not.toBeInTheDocument()
+})
+
+it('does not cite unavailable messages, assistant replies or another day as user evidence', () => {
+  const record = todayRecord(4)
+  const { rerender } = render(<JudgeDaily {...props} completed={4} record={nextVisitRecord(true)} />)
+  const care = screen.getByRole('region', { name: '知知的一点关心' })
+  expect(care).not.toHaveTextContent(/你说昨晚|朋友认真听/)
+  expect(within(care).queryByRole('button', { name: '来自你今天说的话' })).not.toBeInTheDocument()
+  rerender(<JudgeDaily {...props} completed={4} record={{ ...record, messages: record.messages.filter(message => message.id !== 'judge-user-3') }} />)
+  expect(care).not.toHaveTextContent(/你说昨晚|朋友认真听/)
+  rerender(<JudgeDaily {...props} completed={4} record={{ ...record, messages: record.messages.map(message => message.id === 'judge-user-4' ? { ...message, role: 'assistant' } : message) }} />)
+  expect(care).toHaveTextContent('你说昨晚跟朋友待着很放松')
+  expect(care).not.toHaveTextContent('朋友认真听')
 })
 
 it('shows one source detail at a time with seven exact values and no medical interpretation', () => {

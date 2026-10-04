@@ -82,7 +82,7 @@ export default function RhythmDemo({ onBack }: { onBack: () => void }) {
     <main className="rhythm-shell" aria-label="独立节奏场景">
       <header className="rhythm-header">
         <div>
-          <p className="guided-brand">渐知 <span>/</span> 独立节奏场景</p>
+          <p className="guided-brand">渐记 <span>/</span> 独立节奏场景</p>
           <h1>模拟节奏变化</h1>
           <p>这里只演示邀请如何主动退让。日期和回答全是模拟，不进入阿禾画册。</p>
         </div>

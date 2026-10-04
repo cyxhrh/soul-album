@@ -119,7 +119,7 @@ test('damaged cache is preserved, can be backed up and never reports a successfu
   await expect(page.locator('.storage-warning')).toContainText('原缓存未被清除')
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: '下载原缓存备份' }).click()
-  expect((await download).suggestedFilename()).toBe('渐知-本机缓存备份.json')
+  expect((await download).suggestedFilename()).toBe('渐记-本机缓存备份.json')
   await page.getByRole('textbox', { name: '发送消息' }).fill('不能覆盖旧缓存的草稿')
   expect(await page.evaluate(() => localStorage.getItem('jianzhi:local-session:v1'))).toBe('damaged synthetic cache')
   await expect(page.locator('.messenger-input-hint')).toContainText('保存遇到问题')

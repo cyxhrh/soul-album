@@ -34,6 +34,9 @@
 .messenger-contact { display: flex; align-items: center; gap: 12px; flex: none; }
 .messenger-contact h1 { margin: 0; color: var(--chat-ink); font-size: 19px; font-weight: 600; letter-spacing: .02em; }
 .messenger-contact p { margin: 5px 0 0; color: var(--chat-muted); font-size: 12px; }
+@media (min-width: 761px) {
+  .judge-demo .product-chat > .messenger-header { padding-inline: max(28px, calc((100% - 800px) / 2)); }
+}
 .messenger-header-actions { display: flex; align-items: center; justify-content: flex-end; min-width: 0; gap: 16px; }
 .messenger-companion-picker { position: relative; z-index: 5; flex: none; }
 .messenger-companion-picker > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 4px 7px; border-radius: 7px; color: var(--chat-muted); font-size: 12px; cursor: pointer; list-style: none; white-space: nowrap; }

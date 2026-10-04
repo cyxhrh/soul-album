@@ -31,5 +31,5 @@ const server = createSyntheticQuestionServer({
   distDir: resolve(process.cwd(), 'dist'),
 })
 server.listen(port, host, () => {
-  process.stdout.write(`渐知本地 AI 服务运行于 http://${host}:${port}\n`)
+  process.stdout.write(`渐记本地 AI 服务运行于 http://${host}:${port}\n`)
 })

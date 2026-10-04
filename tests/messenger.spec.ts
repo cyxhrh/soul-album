@@ -60,7 +60,7 @@ test('companions switch without changing the draft, and the phone opens a separa
   await page.getByRole('textbox', { name: '发送消息' }).fill('尚未发送的草稿')
   for (const [name, label] of [['小笺', '女性'], ['知墨', '男性'], ['慢慢', '中性'], ['知知', '默认']]) {
     await page.getByLabel('选择伙伴').click()
-    const menu = (await page.getByRole('group', { name: '渐知伙伴' }).boundingBox())!
+    const menu = (await page.getByRole('group', { name: '渐记伙伴' }).boundingBox())!
     expect(menu.x).toBeGreaterThanOrEqual(0)
     expect(menu.x + menu.width).toBeLessThanOrEqual(320)
     const choice = page.getByRole('button', { name: `${name}，${label}形象` })
@@ -70,7 +70,7 @@ test('companions switch without changing the draft, and the phone opens a separa
     await expect(page.locator('.messenger-contact h1')).toHaveText(name)
   }
   await page.getByRole('button', { name: '语音对话' }).click()
-  const call = page.getByRole('region', { name: '渐知语音通话' })
+  const call = page.getByRole('region', { name: '渐记语音通话' })
   await expect(call).toBeVisible()
   await expect(call.locator('.product-call-portrait img')).toHaveAttribute('alt', /知知/)
   await expect(page.getByRole('navigation', { name: '产品导航' })).toBeHidden()

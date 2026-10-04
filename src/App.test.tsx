@@ -17,7 +17,7 @@ describe('Soul Album product', () => {
   it('opens directly in the conversation and keeps its three product tabs', async () => {
     render(<App />)
 
-    expect(screen.getByRole('main', { name: '渐知产品' })).toBeVisible()
+    expect(screen.getByRole('main', { name: '渐记产品' })).toBeVisible()
     expect(screen.getByRole('region', { name: '对话记录' })).toBeVisible()
     expect(await screen.findByLabelText('知知的开场白')).toBeVisible()
     expect(screen.queryByRole('button', { name: '千问聊天' })).not.toBeInTheDocument()

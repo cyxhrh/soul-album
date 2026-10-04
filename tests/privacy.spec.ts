@@ -5,7 +5,7 @@ test.use({ timezoneId: 'Asia/Shanghai' })
 
 async function openProduct(page: Page) {
   await page.goto('/')
-  await expect(page.getByRole('main', { name: '渐知产品' })).toBeVisible()
+  await expect(page.getByRole('main', { name: '渐记产品' })).toBeVisible()
 }
 
 async function chat(page: Page) {
@@ -314,7 +314,7 @@ test('deletion scrubs an answer from questions, album comparison and print', asy
   await page.getByRole('button', { name: '删除这条原话' }).click()
   await page.getByRole('button', { name: '继续删除' }).click()
   await expect(page.getByRole('dialog', { name: '确认撤下日页标题' })).toHaveCount(0)
-  await expect(page.getByRole('main', { name: '渐知产品' })).not.toContainText(secret)
+  await expect(page.getByRole('main', { name: '渐记产品' })).not.toContainText(secret)
   await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText('资料不足')
   await expect(page.getByRole('region', { name: '已回答问题' })).toContainText('引用已删除')
   await page.getByRole('button', { name: '对话', exact: true }).click()

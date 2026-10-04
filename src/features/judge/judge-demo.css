@@ -6,7 +6,7 @@
 .judge-nav-note p { font-family: SimSun, serif; font-size: 15px; line-height: 2; }
 .judge-nav-note small { font-size: 10px; }
 .judge-intro { flex: none; padding: 14px max(28px, calc((100% - 800px) / 2)); border-bottom: 1px solid #e5e7df; background: #f7f8f3; }
-.judge-intro p { margin: 0 0 4px; font-size: 12px; color: #52674f; }
+.judge-intro p { margin: 0 0 5px; font-size: 14px; line-height: 1.6; color: var(--text); }
 .judge-intro > span { font-size: 11px; color: #7b8576; }
 .judge-record-link { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #7b8576; }
 .judge-record-link button { font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
@@ -30,16 +30,24 @@
 .judge-demo .judge-source-button:disabled { opacity: .5; cursor: not-allowed; }
 .judge-intro .judge-source-button { display: block; }
 .judge-message-source { margin: -17px 0 6px 54px; }
-.judge-understanding-update { padding: 17px 20px; border: 1px solid #d7dfce; border-radius: 9px; background: #f7f8f2; color: #304434; font-size: 13px; line-height: 1.8; }
+.judge-understanding-update { padding: 17px 20px; border: 1px solid var(--border); border-radius: 9px; background: #f7f8f2; color: var(--text); font-size: 13px; line-height: 1.8; }
 .product-thread > .judge-understanding-update { margin: 0 0 22px 54px; max-width: 610px; }
 .judge-insight-overline { margin: 0 0 12px; font-size: 11px; letter-spacing: .05em; color: #5f715a; }
 .judge-understanding-update dl { margin: 0; }
 .judge-understanding-update dl > div { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; margin-top: 12px; }
 .judge-understanding-update dd { margin: 0; overflow-wrap: anywhere; }
 .judge-understanding-update dd button { display: block; }
+.judge-understanding-withdrawn dd { color: var(--muted); }
+.judge-understanding-withdrawn del { text-decoration-thickness: 1px; text-decoration-color: var(--muted); }
+.judge-understanding-stated dd { font-weight: 500; }
+.judge-understanding-tentative dd { color: var(--muted); font-size: 12px; }
+.judge-understanding-update .judge-understanding-confirmed { margin-inline: -10px; padding: 10px; border-radius: 6px; background: var(--accent-soft); }
+.judge-understanding-confirmed dd { color: #36543f; font-weight: 600; }
+.judge-understanding-update dd .judge-source-button { font-weight: 400; }
 .judge-insight-status { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #e6efdf; color: #3e6040; font-size: 11px; font-weight: 400; white-space: nowrap; }
 .judge-insight-status.withdrawn { color: #6b6d65; background: #eaece5; }
 .judge-insight-status.tentative { color: #78623b; background: #f1e9d8; }
+.judge-insight-status.confirmed { background: var(--surface); color: #36543f; font-weight: 600; }
 .judge-demo .daily-portrait { margin: 20px 0 0; border: 0; padding-top: 0; }
 .judge-demo .daily-portrait > h3 { margin-top: 0; }
 .judge-portrait-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 15px 0 20px; }
@@ -81,7 +89,7 @@
   .judge-demo .judge-header-actions { gap: 5px; flex-direction: column; align-items: flex-end; }
   .judge-header-actions button { padding: 5px 0; font-size: 11px; }
   .judge-intro { padding: 10px 16px; }
-  .judge-intro p { font-size: 11px; }
+  .judge-intro p { font-size: 13px; }
   .judge-intro > span { font-size: 10px; }
   .judge-demo .messenger-input-hint span { display: inline; }
   .judge-complete { min-height: 85px; }

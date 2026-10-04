@@ -38,6 +38,40 @@ test('daily samples preserve a reply in progress and link back to the current di
   expect(errors).toEqual([])
 })
 
+test('daily care opens only the user quotes already shared that day', async ({ page }) => {
+  await page.goto('/?demo=judge')
+  for (let round = 0; round < 3; round++) {
+    await page.getByRole('button', { name: '发送', exact: true }).click()
+    await expect(page.getByRole('textbox', { name: '预设消息' })).toHaveValue(DEMO_ROUNDS[round + 1].user)
+  }
+  await page.getByRole('button', { name: '日常', exact: true }).click()
+  const daily = page.getByRole('region', { name: '日常生活记录' })
+  const care = daily.getByRole('region', { name: '知知的一点关心' })
+  await care.getByRole('button', { name: '来自你今天说的话', exact: true }).click()
+  const source = page.getByRole('dialog', { name: '这句话的来处' })
+  await expect(source).toBeVisible()
+  await expect(source.locator('blockquote')).toHaveCount(1)
+  await expect(source.getByText(DEMO_ROUNDS[2].user, { exact: true })).toBeVisible()
+  await expect(source.getByText(DEMO_ROUNDS[3].user, { exact: true })).toHaveCount(0)
+  await source.getByRole('button', { name: '回到阅读', exact: true }).click()
+  await daily.getByRole('button', { name: '回到对话', exact: true }).click()
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: '预设消息' })).toHaveValue(DEMO_ROUNDS[4].user)
+  await page.getByRole('button', { name: '日常', exact: true }).click()
+  await care.getByRole('button', { name: '来自你今天说的话', exact: true }).click()
+  await expect(source.locator('blockquote')).toHaveCount(3)
+  for (const round of [1, 2, 3]) await expect(source.getByText(DEMO_ROUNDS[round].user, { exact: true })).toBeVisible()
+  await expect(source.locator('blockquote small')).toHaveText(['用户原话', '用户原话', '用户原话'])
+  await source.getByRole('button', { name: '回到阅读', exact: true }).click()
+  await daily.getByRole('button', { name: '查看2026年10月3日的日常', exact: true }).click()
+  await expect(care.getByRole('button', { name: '来自你今天说的话', exact: true })).toHaveCount(0)
+  await daily.getByRole('button', { name: '查看2026年10月4日的日常', exact: true }).click()
+  await daily.getByText('数据来源', { exact: true }).click()
+  for (const name of ['显示步数示例', '显示心率示例', '显示消费示例']) await daily.getByLabel(name).uncheck()
+  await expect(care.getByRole('button', { name: '来自你今天说的话', exact: true })).toHaveCount(0)
+  await expect(care).toContainText('由你选择显示哪些示例')
+})
+
 for (const width of [320, 375]) {
   test(`daily records and three navigation entries fit a ${width}px screen`, async ({ page }) => {
     await page.setViewportSize({ width, height: 812 })

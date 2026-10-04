@@ -20,7 +20,7 @@ export function JudgeCompanionPicker({ id, onSelect }: { id: string; onSelect: (
   }}>
     <summary ref={summary} aria-label="选择伙伴" title="换个伙伴"><img src={companionImage(id)} alt="" />
       <span>换个伙伴</span><span aria-hidden="true">⌄</span></summary>
-    <div className="messenger-companion-options" role="group" aria-label="渐知伙伴">
+    <div className="messenger-companion-options" role="group" aria-label="渐记伙伴">
       {COMPANIONS.map(item => <button type="button" key={item.id} aria-pressed={id === item.id}
         aria-label={`${item.name}，${item.label}形象`} onClick={() => { onSelect(item.id); close() }}>
         <img src={companionImage(item.id)} alt="" /><strong>{item.name}</strong>
@@ -96,11 +96,11 @@ export function JudgeCall({ name, src, label, nextText, lastReply, lastUser, pen
     return () => window.clearInterval(interval)
   }, [])
   function finish() { setPhase('idle'); onSend(); exit.current?.focus() }
-  return <section className="product-call-screen screen-only" aria-label="渐知语音通话" onKeyDown={event => {
+  return <section className="product-call-screen screen-only" aria-label="渐记语音通话" onKeyDown={event => {
     if (event.key === 'Escape') { event.preventDefault(); onClose() }
   }}>
     <div className="product-call-stage">
-      <div className={`product-call-portrait${phase === 'recording' ? ' is-listening' : ''}`}><img src={src} alt={`${name}，渐知的${label}伙伴`} /></div>
+      <div className={`product-call-portrait${phase === 'recording' ? ' is-listening' : ''}`}><img src={src} alt={`${name}，渐记的${label}伙伴`} /></div>
       <h1>{phase === 'recording' ? '聆听中' : phase === 'transcribing' ? '正在写下你的话' : pending ? `${name}正在回应` : '准备听你说'}</h1>
       <div className="product-call-dialogue" aria-live="polite">
         {lastUser && phase !== 'transcribing' && <p className="product-call-said">{lastUser}</p>}

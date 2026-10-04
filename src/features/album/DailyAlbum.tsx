@@ -156,7 +156,7 @@ export default function DailyAlbum({ record, onSave, modelReady, sample = false,
           {users[0] && <blockquote>{Array.from(users[0].text).slice(0, 180).join('')}{Array.from(users[0].text).length > 180 ? '…' : ''}</blockquote>}
           <small>原话摘录 · 完整内容在背面</small>
         </div>}
-        <footer className="daily-colophon"><span>{sample ? '合成示例 · 可翻面体验' : record.userEdited ? '由你修订' : record.generatedAt ? '由当天对话整理，可修改' : '原话已保留，尚未生成日记'}</span><span>渐知</span></footer>
+        <footer className="daily-colophon"><span>{sample ? '合成示例 · 可翻面体验' : record.userEdited ? '由你修订' : record.generatedAt ? '由当天对话整理，可修改' : '原话已保留，尚未生成日记'}</span><span>渐记</span></footer>
       </> : <div className="daily-archive">
         <section><h3>完整对话 <span>{record.messages.length} 条</span></h3>
           <p className="daily-help">原话、模型回应和系统问候分开保留。修订只影响此档案，不改写当时聊天。时间按 {timezone} 显示。</p>

@@ -52,6 +52,8 @@
 .judge-daily-care h3 { margin: 1px 0 10px; color: #47765b; font-size: 12px; font-weight: 500; }
 .judge-daily-care p { margin: 0 0 10px; max-width: 760px; font-family: SimSun, serif; font-size: 15px; line-height: 1.95; }
 .judge-daily-care small { display: block; color: #6b7c62; font-size: 10px; line-height: 1.8; }
+.judge-daily-care-source { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 13px; }
+.judge-daily-care-source .judge-source-button { margin: 0; padding: 5px 0; font-size: 11px; }
 .judge-daily-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 13px 20px; margin-top: 23px; }
 .judge-daily-bottom > p { margin: 0; color: #6c7b65; font-size: 11px; line-height: 1.8; }
 .judge-daily-actions { display: flex; flex-wrap: wrap; gap: 9px; }

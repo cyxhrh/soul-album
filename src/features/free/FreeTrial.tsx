@@ -359,7 +359,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
       const url = URL.createObjectURL(new Blob([raw], { type: 'application/json;charset=utf-8' }))
       const link = document.createElement('a')
       link.href = url
-      link.download = '渐知-本机缓存备份.json'
+      link.download = '渐记-本机缓存备份.json'
       link.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (cause) { setStorageError(cause instanceof Error ? cause.message : '无法读取缓存，请下载当前画册。') }
@@ -1370,11 +1370,11 @@ function FreeSession({ onReset }: { onReset: () => void }) {
   }
 
   return (
-    <main className={'product-shell product-tab-' + activeTab + (voiceConversation ? ' product-shell-call' : '')} aria-label="渐知产品">
+    <main className={'product-shell product-tab-' + activeTab + (voiceConversation ? ' product-shell-call' : '')} aria-label="渐记产品">
       <nav className="product-nav screen-only" aria-label="产品导航" hidden={voiceConversation}>
         <div className="product-brand"><span className="product-brand-mark" aria-hidden="true">
           <img src={`${import.meta.env.BASE_URL}brand/jianzhi-sprout.svg`} alt="" width="36" height="36" draggable={false} /></span>
-          <strong>渐知</strong><small>慢慢认识你</small></div>
+          <strong>渐记</strong><small>慢慢认识你</small></div>
         <div className="product-nav-links">
           <button type="button" aria-current={activeTab === 'chat' ? 'page' : undefined} onClick={() => setActiveTab('chat')}><ProductIcon name="chat" /><span>对话</span></button>
           <button type="button" aria-current={activeTab === 'album' ? 'page' : undefined} onClick={() => setActiveTab('album')}><ProductIcon name="album" /><span>画册</span></button>
@@ -1395,10 +1395,10 @@ function FreeSession({ onReset }: { onReset: () => void }) {
         {status && <p ref={statusRef} className="free-status product-status screen-only" role="status" tabIndex={-1}>{status}</p>}
         <div className="product-content">
           {voiceConversation && activeTab === 'chat' && <section className="product-call-screen screen-only"
-            aria-label="渐知语音通话">
+            aria-label="渐记语音通话">
             <div className="product-call-stage">
               <div className={`product-call-portrait${voiceState === 'recording' ? ' is-listening' : ''}`}>
-                <img src={companionSrc} alt={`${companion.name}，渐知的${companion.label}伙伴`} />
+                <img src={companionSrc} alt={`${companion.name}，渐记的${companion.label}伙伴`} />
               </div>
               <h1>{voiceState === 'recording' ? '聆听中' : voiceState === 'transcribing' ?
                 voiceDelivery ? '正在写下你的话' : '正在整理你说的话' : callPending ?
@@ -1455,7 +1455,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                 <details className="messenger-companion-picker" ref={companionPickerRef}>
                   <summary aria-label="选择伙伴" title="换个伙伴"><img src={companionSrc} alt="" />
                     <span>换个伙伴</span><span aria-hidden="true">⌄</span></summary>
-                  <div className="messenger-companion-options" role="group" aria-label="渐知伙伴">
+                  <div className="messenger-companion-options" role="group" aria-label="渐记伙伴">
                     {COMPANIONS.map((item) => <button type="button" key={item.id}
                       aria-pressed={companionId === item.id} aria-label={`${item.name}，${item.label}形象`}
                       onClick={() => {
@@ -1514,7 +1514,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     {marker && <p className="product-time-divider"><time dateTime={item.sentAt}>{marker}</time></p>}
                     {item.exchange?.promptQuestionId && (openingDismissed || item.exchange.promptQuestionId !== session.firstQuestionId) && <div className="product-bubble-row agent">
                       <ChatAvatar src={companionSrc} />
-                      <div className="product-bubble"><small>渐知 · 当时的问题</small>
+                      <div className="product-bubble"><small>渐记 · 当时的问题</small>
                         <p>{snapshot.questions.find((question) => question.id === item.exchange?.promptQuestionId)?.text ?? '旧提问已撤下。'}</p></div>
                     </div>}
                     <div className="product-bubble-row user"><div className="product-bubble"><p>{item.text}</p></div><ChatAvatar user /></div>
@@ -1539,7 +1539,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
                     {answered && !isProactive && (openingDismissed || snapshot.questions.find((question) =>
                       question.id === session.firstQuestionId)?.answeredByMessageId !== item.messageId) && <div className="product-bubble-row agent">
                       <ChatAvatar src={companionSrc} />
-                      <div className="product-bubble"><small>渐知 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
+                      <div className="product-bubble"><small>渐记 · {answered.mode === 'cloud' ? '千问提议的问题' : '当时的规则问题'}</small>
                         <p>{answered.status === 'ready' ? answered.text :
                           answered.status === 'reference-deleted' ? '这题引用的原话已删除。' : '这题引用的原话已有修订。'}</p>
                         {answeredSourcePreview && <small className="product-question-source">{answeredSourcePreview}</small>}
@@ -1800,7 +1800,7 @@ function FreeSession({ onReset }: { onReset: () => void }) {
             </section>
               </details>
             </> : <div className="product-album-empty screen-only">
-              <p className="album-empty-eyebrow">渐知 · 你的生活画册</p><h2>日子，值得慢慢翻阅。</h2>
+              <p className="album-empty-eyebrow">渐记 · 你的生活画册</p><h2>日子，值得慢慢翻阅。</h2>
               <p>聊一句，留下你的第一页。正面回看生活，背面保留完整记录。</p>
               <button type="button" onClick={() => setActiveTab('chat')}>去对话</button>
               <div className="album-sample-preview"><DailyAlbum record={sample} onSave={setSample} modelReady={false} sample /></div>

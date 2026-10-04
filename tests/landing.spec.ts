@@ -2,7 +2,7 @@ import { expect, test } from './offline-model'
 
 test('the product opens directly in a private conversation', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('main', { name: '渐知产品' })).toBeVisible()
+  await expect(page.getByRole('main', { name: '渐记产品' })).toBeVisible()
   await expect(page.getByRole('region', { name: '对话记录' })).toBeVisible()
   await expect(page.getByLabel('知知的开场白')).toBeVisible()
   const nav = page.getByRole('navigation', { name: '产品导航' })

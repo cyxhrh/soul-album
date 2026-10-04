@@ -1,4 +1,4 @@
-# 渐知前端交接 · 2026-10-04
+# 渐记前端交接 · 2026-10-04
 
 当前版本在 [cyxhrh/soul-album 的 codex/teammate-frontend-integration 分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration)。这是 10 月 3 日交接之后的完整更新；旧文档保留为历史记录，本次体验以本文为准。
 
@@ -7,8 +7,8 @@
 Node.js 24 与 npm。使用新目录克隆可避免影响队友已有未提交工作：
 
 ```bash
-git clone --branch codex/teammate-frontend-integration https://github.com/cyxhrh/soul-album.git jianzhi-frontend-demo
-cd jianzhi-frontend-demo
+git clone --branch codex/teammate-frontend-integration https://github.com/cyxhrh/soul-album.git jianji-frontend-demo
+cd jianji-frontend-demo
 npm ci --ignore-scripts
 npm run dev -- --host 127.0.0.1 --port 5176 --strictPort
 ```

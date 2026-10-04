@@ -28,7 +28,7 @@ test('preserves the original call layout and shares the preset flow with restore
   await expect(page.getByRole('button', { name: '发送', exact: true })).toBeInViewport()
   await page.getByRole('button', { name: '语音对话', exact: true }).click()
   expect(await callShape()).toEqual(originalShape)
-  const call = page.getByRole('region', { name: '渐知语音通话' })
+  const call = page.getByRole('region', { name: '渐记语音通话' })
   await expect(call.getByRole('img')).toHaveAttribute('src', /jianji-xiaojian-cutout\.png$/)
   await page.getByRole('button', { name: '开始语音对话聆听' }).click()
   await page.getByRole('button', { name: '说完了，转写并发送' }).click()

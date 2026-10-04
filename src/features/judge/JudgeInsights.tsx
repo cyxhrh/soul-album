@@ -9,10 +9,10 @@ export function UnderstandingUpdate({ record, confirmed, onSource }: { record: D
   return <section className="judge-understanding-update" aria-label="这次理解的变化">
     <p className="judge-insight-overline">听你补充后，重新理解</p>
     <dl>
-      <div><dt><span className="judge-insight-status withdrawn">已撤回</span></dt><dd>聊天时一直提着劲，可能有些耗神。</dd></div>
-      <div><dt><span className="judge-insight-status">你说的</span></dt><dd>和朋友待着很放松，回程等车、换车才比较折腾。<button type="button" className="judge-source-button" onClick={() => onSource(record, ['judge-user-3'])}>看你的补充 ↗</button></dd></div>
-      <div><dt><span className="judge-insight-status tentative">仍待确认</span></dt><dd>疲惫可能与返程有关，具体原因还不能确定。</dd></div>
-      {confirmed && <div><dt><span className="judge-insight-status">用户已确认</span></dt><dd>这次开心，也来自朋友认真听你讲还没做完的项目。<button type="button" className="judge-source-button" onClick={() => onSource(record, ['judge-user-2', 'judge-user-4'])}>看确认的原话 ↗</button></dd></div>}
+      <div className="judge-understanding-withdrawn"><dt><span className="judge-insight-status withdrawn">已撤回</span></dt><dd><del>聊天时一直提着劲，可能有些耗神。</del></dd></div>
+      <div className="judge-understanding-stated"><dt><span className="judge-insight-status">你说的</span></dt><dd>和朋友待着很放松，回程等车、换车才比较折腾。<button type="button" className="judge-source-button" onClick={() => onSource(record, ['judge-user-3'])}>看你的补充 ↗</button></dd></div>
+      <div className="judge-understanding-tentative"><dt><span className="judge-insight-status tentative">仍待确认</span></dt><dd>疲惫可能与返程有关，具体原因还不能确定。</dd></div>
+      {confirmed && <div className="judge-understanding-confirmed"><dt><span className="judge-insight-status confirmed">用户已确认</span></dt><dd>这次开心，也来自朋友认真听你讲还没做完的项目。<button type="button" className="judge-source-button" onClick={() => onSource(record, ['judge-user-2', 'judge-user-4'])}>看确认的原话 ↗</button></dd></div>}
     </dl>
   </section>
 }
@@ -46,7 +46,7 @@ export function AIPractice() {
       <p>服务端检查了回复结构、轻问格式和引文逐字匹配。这个问题仍是待用户确认的提议，不能直接当作因果结论。</p>
       <dl className="judge-practice-boundaries"><div><dt>当前演示</dt><dd>五轮对话、画册和下一次见面均为预设流程。</dd></div><div><dt>已验证</dt><dd>一次真实模型请求，返回提问与两条原话引用。</dd></div><div><dt>后续目标</dt><dd>持续记忆、跨天理解与后续交流的完整模型链路；目前不能用这次实验证明已完成。</dd></div></dl>
       <p className="daily-help">实验保留了文本记录，尚无原始请求与响应截图，不代表长期质量验证。</p>
-      <a className="judge-source-button" href={`${import.meta.env.BASE_URL}evidence/qwen-synthetic-trial-2026-09-29.md`} download="渐知-千问真实实验记录.md">下载实验记录 .md ↗</a>
+      <a className="judge-source-button" href={`${import.meta.env.BASE_URL}evidence/qwen-synthetic-trial-2026-09-29.md`} download="渐记-千问真实实验记录.md">下载实验记录 .md ↗</a>
     </section>
   </details>
 }

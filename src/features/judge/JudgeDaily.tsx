@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { ChatAvatar } from '../free/ChatIdentity'
+import type { DailyRecord } from '../album/dailyRecord'
+import type { OpenSource } from './JudgeInsights'
 import {
   DAILY_SAMPLES, DAILY_SOURCE_INFO, DAILY_SOURCE_KEYS,
   dailyValue, displayDailyValue, type DailySource, type DailyVisibility, type JudgeDailySample,
@@ -8,6 +10,8 @@ import './judge-daily.css'
 
 type JudgeDailyProps = {
   completed: number
+  record: DailyRecord
+  onSource: OpenSource
   companionName: string
   companionSrc: string
   onChat: () => void
@@ -48,15 +52,19 @@ function DailyChart({ source, selected }: { source: DailySource; selected: strin
   </>
 }
 
-function careForDay(sample: JudgeDailySample, visible: DailyVisibility, completed: number): { text: string; extra?: string; basis: string } {
+function careForDay(sample: JudgeDailySample, visible: DailyVisibility, completed: number, record: DailyRecord): { text: string; extra?: string; basis: string; sourceIds?: string[] } {
   if (!DAILY_SOURCE_KEYS.some((source) => visible[source])) {
     return { text: '开启一个示例，看看这些日常记录如何呈现。想说的话，也可以随时回到对话里。', basis: '由你选择显示哪些示例' }
   }
-  if (sample.partial && completed >= 3) {
+  const hasUserQuote = (id: string) => record.date === sample.date && record.messages.some(message =>
+    message.id === id && message.role === 'user' && message.text.trim() && message.recordedAt.startsWith(sample.date))
+  if (sample.partial && completed >= 3 && hasUserQuote('judge-user-3')) {
+    const confirmed = completed >= 4 && hasUserQuote('judge-user-2') && hasUserQuote('judge-user-4')
     return {
       text: '你说昨晚跟朋友待着很放松，是返程又等车又换车比较折腾。今天想慢一点也没关系，身体的感觉，你说了算。',
-      extra: completed >= 4 ? '朋友认真听你讲项目的那份开心，也不用被身体的疲惫盖过去。你说的“身体累，但心里挺亮的”，我也记着。' : undefined,
-      basis: '来自今天已分享的对话 · 疲惫的原因仍未确定',
+      extra: confirmed ? '朋友认真听你讲项目的那份开心，也不用被身体的疲惫盖过去。你说的“身体累，但心里挺亮的”，我也记着。' : undefined,
+      basis: '疲惫的原因仍未确定',
+      sourceIds: confirmed ? ['judge-user-2', 'judge-user-3', 'judge-user-4'] : ['judge-user-3'],
     }
   }
   if (visible.steps) {
@@ -76,12 +84,12 @@ function careForDay(sample: JudgeDailySample, visible: DailyVisibility, complete
   return { text: '身体的感觉，你比数字更清楚。想聊生活里的小事，或者今天只想歇一会儿，都可以。', basis: '心率只作记录，不作身体状态判断' }
 }
 
-export default function JudgeDaily({ completed, companionName, companionSrc, onChat, onAlbum }: JudgeDailyProps) {
+export default function JudgeDaily({ completed, record, onSource, companionName, companionSrc, onChat, onAlbum }: JudgeDailyProps) {
   const [selectedDate, setSelectedDate] = useState(DAILY_SAMPLES[DAILY_SAMPLES.length - 1].date)
   const [visible, setVisible] = useState<DailyVisibility>({ steps: true, heartRate: true, spending: true })
   const [detail, setDetail] = useState<DailySource | null>(null)
   const sample = DAILY_SAMPLES.find((day) => day.date === selectedDate)!
-  const care = careForDay(sample, visible, completed)
+  const care = careForDay(sample, visible, completed, record)
 
   function toggleSource(source: DailySource) {
     if (visible[source] && detail === source) setDetail(null)
@@ -137,7 +145,12 @@ export default function JudgeDaily({ completed, companionName, companionSrc, onC
 
       <section className="judge-daily-care" aria-label={`${companionName}的一点关心`}>
         <ChatAvatar src={companionSrc} />
-        <div><h3>{companionName}的一点关心</h3><p>{care.text}</p>{care.extra && <p>{care.extra}</p>}<small>{care.basis}</small></div>
+        <div><h3>{companionName}的一点关心</h3><p>{care.text}</p>{care.extra && <p>{care.extra}</p>}
+          <div className="judge-daily-care-source">
+            {care.sourceIds && <button type="button" className="judge-source-button" onClick={() => onSource(record, care.sourceIds!)}>来自你今天说的话<span aria-hidden="true"> ↗</span></button>}
+            <small>{care.basis}</small>
+          </div>
+        </div>
       </section>
 
       <div className="judge-daily-bottom">

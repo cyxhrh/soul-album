@@ -11,7 +11,7 @@ test('product and archived demo routes remain usable at phone and desktop widths
     for (const entrance of [
       { path: '/?demo=story', main: '阿禾引导剧情', label: '合成演示' },
       { path: '/?demo=rhythm', main: '独立节奏场景', label: '模拟节奏变化' },
-      { path: '/', main: '渐知产品', label: 'AI 记录伙伴' },
+      { path: '/', main: '渐记产品', label: 'AI 记录伙伴' },
     ]) {
       await page.goto(entrance.path)
       const main = page.getByRole('main', { name: entrance.main })
@@ -75,7 +75,7 @@ test('finished guided story opens a fresh rule-based free trial, even after look
   await expect(page.getByRole('button', { name: '返回首页' })).toBeVisible()
 
   await page.getByRole('button', { name: '进入自由每日问答' }).click()
-  const free = page.getByRole('main', { name: '渐知产品' })
+  const free = page.getByRole('main', { name: '渐记产品' })
   await expect(free).toBeVisible()
   await expect(free.getByRole('region', { name: '对话记录' })).toBeVisible()
   await expect(free.getByRole('article', { name: '第 1 天画册页' })).toHaveCount(0)
@@ -265,7 +265,7 @@ test('granting a synthetic photo again gives the fresh consent a later display t
 
 async function openFree(page: import('@playwright/test').Page) {
   await page.goto('/')
-  await expect(page.getByRole('main', { name: '渐知产品' })).toBeVisible()
+  await expect(page.getByRole('main', { name: '渐记产品' })).toBeVisible()
   await expect(page.getByRole('region', { name: '对话记录' })).toBeVisible()
 }
 

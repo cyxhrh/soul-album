@@ -56,7 +56,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <div>
-            <h1>渐知</h1>
+            <h1>渐记</h1>
             <span>AI 生活伙伴</span>
           </div>
         </div>
@@ -98,7 +98,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           </ol>
         </section>
       </main>
-      <footer className="site-footer"><span>渐知</span><span>慢慢认识你，陪你看见自己。</span></footer>
+      <footer className="site-footer"><span>渐记</span><span>慢慢认识你，陪你看见自己。</span></footer>
     </div>
   )
 }

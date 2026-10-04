@@ -76,7 +76,7 @@ test('judge flow works without APIs, updates both album faces, downloads Markdow
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('button', { name: '下载 .md' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toBe('渐知-示例-2026-10-04.md')
+  expect(download.suggestedFilename()).toBe('渐记-示例-2026-10-04.md')
   expect(await download.failure()).toBeNull()
   const saved = await download.path()
   const markdown = await readFile(saved!, 'utf8')

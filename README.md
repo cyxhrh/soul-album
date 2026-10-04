@@ -1,8 +1,10 @@
-# 渐知 · 产品 Demo 与本地后端核心
+# 渐记 · 产品 Demo 与本地后端核心
 
-**2026-10-04 最新评委体验**在 [`codex/teammate-frontend-integration` 分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration)。队友先看[本次交接与体验入口](docs/handoff/teammate-frontend-2026-10-04.md)，启动后打开 `/?demo=judge`：五轮预设对话、画册目录与正反面、下一次见面、知知表情，以及步数／静息心率／消费的日常页。原通话、语音输入和伙伴选择界面均保留；所有评委体验内容使用合成数据，无需后端或模型密钥。
+**2026-10-05 比赛提交准备包**：[从这里开始](docs/submission/2026-10-05/README.md)。包括可粘贴的表单文案、AI 实践说明、截图、Markdown 样例、魔搭部署文件与队友验收清单。[下载材料与静态站点](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)。必填的 ModelScope 创空间仍需队友用自己的账号创建、部署并回填公开链接。
 
-“每天问一点，慢慢看见自己”。打开应用即进入对话：首页用气泡消息记录日常，画册翻看已有记录，生活数据页展示逐项开启的模拟图表。这个阶段先确认产品本身的交互与功能，暂不制作作品介绍页。
+**最新评委体验**在 [`codex/teammate-frontend-integration` 分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration)：五轮预设对话、原话核对与理解修正、画册目录与两种阅读方式、下一次见面、知知表情，以及步数／静息心率／消费的日常页。原通话、语音输入和伙伴选择界面均保留；所有评委体验内容使用合成数据，无需后端或模型密钥。线上提交构建默认进入评委体验；本地开发打开 `/?demo=judge`。
+
+“渐记日常，渐见自己”。首页用气泡消息记录日常，画册翻看已有记录，生活数据页展示逐项选择的模拟数据。
 
 在线体验：[GitHub Pages 前端 Demo](https://cyxhrh.github.io/soul-album/)；队友可从[公开源码仓库](https://github.com/cyxhrh/soul-album)获取代码。
 
@@ -47,7 +49,7 @@ npm run dev:all
 
 在 `http://127.0.0.1:5175/?demo=ai` 打开独立阿禾实验页，也可从合成剧情结尾进入。浏览器只向同源 `/api/ai/synthetic-question` 发送 `{ "scenario": "ahe" }`；服务端自行选择固定合成语料。无模型配置时接口返回 `503 model_not_configured`，页面显示明确的规则示例，不把它称为真实 AI 结果。`npm run test` 使用注入的假提供方验证接线、错误、限流和逐字引文检查，不消耗模型额度；这些测试不能证明真实模型的提问质量。
 
-有可用百炼密钥时，在 Windows 上**只需本机保存一次**：运行 `powershell -NoProfile -STA -File scripts/save-qwen-key-gui.ps1 -Region cn`，只在标题为“渐知 · 保存百炼 Key”的独立遮蔽窗口中输入北京地域密钥，**不要在普通终端或聊天中输入**。窗口以 [Windows DPAPI](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/convertfrom-securestring) 加密后保存到当前用户的 `%LOCALAPPDATA%\SoulAlbum\dashscope-cn.dpapi`，仓库中不存密钥；此文件只能由同一台电脑的当前 Windows 账户解密。可运行 `powershell -NoProfile -File scripts/save-qwen-key.ps1 -Region cn -Status` 检查是否存在，或用 `-Remove` 删除本机保存副本；删除后已经运行的服务需重启才能停止使用内存里的旧 Key。密钥需要更换时，先在百炼控制台撤销旧 Key，再重新打开遮蔽窗口覆盖本机副本；只覆盖本地文件不会让旧 Key 失效。其他地域分别用 `intl`、`us`。
+有可用百炼密钥时，在 Windows 上**只需本机保存一次**：运行 `powershell -NoProfile -STA -File scripts/save-qwen-key-gui.ps1 -Region cn`，只在标题为“渐记 · 保存百炼 Key”的独立遮蔽窗口中输入北京地域密钥，**不要在普通终端或聊天中输入**。窗口以 [Windows DPAPI](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/convertfrom-securestring) 加密后保存到当前用户的 `%LOCALAPPDATA%\SoulAlbum\dashscope-cn.dpapi`，仓库中不存密钥；此文件只能由同一台电脑的当前 Windows 账户解密。可运行 `powershell -NoProfile -File scripts/save-qwen-key.ps1 -Region cn -Status` 检查是否存在，或用 `-Remove` 删除本机保存副本；删除后已经运行的服务需重启才能停止使用内存里的旧 Key。密钥需要更换时，先在百炼控制台撤销旧 Key，再重新打开遮蔽窗口覆盖本机副本；只覆盖本地文件不会让旧 Key 失效。其他地域分别用 `intl`、`us`。
 
 之后在**没有密钥的终端**运行 `npm run build:server`；可另开无密钥终端运行 `npm run dev -- --host 127.0.0.1 --port 5175 --strictPort`。最后运行 `powershell -NoProfile -File scripts/run-qwen-local.ps1 -Region cn`：启动器会自动读取已保存的北京地域密钥，若未保存则明确报错而不会要求在终端输入；在运行期间把解密后的 Key 放入启动器与后端 Node 子进程环境变量，正常退出时清理启动器环境变量。仅需临时使用另一枚 Key 时可显式加 `-PromptForKey`，不会覆盖保存值。脚本默认模型是 `qwen-plus`，自动采用 Windows 系统 HTTPS 代理；使用代理时需 Node.js 22.21.0+ 或 24.5.0+。非默认业务空间可用 `-BaseUrl` 指定百炼提供的专属兼容地址。当前机制只用于本机开发，不提供跨设备共享密钥；同一 Windows 用户下运行的程序可能检查运行中进程的环境；强制结束进程也可能跳过清理，因此这不能替代生产凭据管理。
 

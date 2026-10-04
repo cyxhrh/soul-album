@@ -236,7 +236,7 @@ describe('restricted synthetic model endpoint', () => {
     const site = await fetch(new URL('/', url))
     expect(site.status).toBe(200)
     expect(site.headers.get('content-type')).toContain('text/html')
-    expect(await site.text()).toContain('渐知测试页')
+    expect(await site.text()).toContain('渐记测试页')
     const api = await post(url)
     expect(api.response.status).toBe(503)
     expect(api.data.code).toBe('model_not_configured')

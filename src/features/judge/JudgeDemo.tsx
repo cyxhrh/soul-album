@@ -41,7 +41,7 @@ function DemoAlbum({ record, corrected, onChat, companionName, onSource, onNextV
     const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = `渐知-示例-${record.date}.md`
+    anchor.download = `渐记-示例-${record.date}.md`
     anchor.click()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -80,7 +80,7 @@ function DemoAlbum({ record, corrected, onChat, companionName, onSource, onNextV
         </details>
         <details className="judge-markdown"><summary>查看 Markdown 源文件</summary><pre>{markdown}</pre></details>
       </div>}
-      <footer className="daily-colophon"><span>{corrected ? '认真听见的，都留在这一页。' : '生活的片刻，慢慢装订成册。'}</span><span>渐知</span></footer>
+      <footer className="daily-colophon"><span>{corrected ? '认真听见的，都留在这一页。' : '生活的片刻，慢慢装订成册。'}</span><span>渐记</span></footer>
     </article>
     <div className="daily-bottom"><div className="daily-actions"><button type="button" onClick={download}>下载 .md</button><button type="button" onClick={onChat}>回到对话</button>{onNextVisit && <button type="button" className="daily-primary" onClick={onNextVisit}>体验下一次见面</button>}</div><p className="daily-help">演示记录可以翻阅、核对理解变化和下载；下一次见面同样为预设体验。</p></div>
   </section>
@@ -193,9 +193,9 @@ export default function JudgeDemo() {
     setVisitStarted(true); setVisitOpen(true); setSelectedDate(null); setVoicePreview('idle'); setCallOpen(false); setTab('chat')
   }
 
-  return <main className={`product-shell judge-demo product-tab-${tab}${callOpen ? ' product-shell-call' : ''}`} aria-label="渐知示例体验">
+  return <main className={`product-shell judge-demo product-tab-${tab}${callOpen ? ' product-shell-call' : ''}`} aria-label="渐记示例体验">
     <nav className="product-nav" aria-label="产品导航" hidden={callOpen}>
-      <div className="product-brand"><span className="product-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}brand/jianzhi-sprout.svg`} alt="" width="36" height="36" /></span><strong>渐知</strong><small>慢慢认识你</small></div>
+      <div className="product-brand"><span className="product-brand-mark" aria-hidden="true"><img src={`${import.meta.env.BASE_URL}brand/jianzhi-sprout.svg`} alt="" width="36" height="36" /></span><strong>渐记</strong><small>慢慢认识你</small></div>
       <div className="product-nav-links">
         <button type="button" aria-current={tab === 'chat' ? 'page' : undefined} onClick={() => changeTab('chat')}><ProductIcon name="chat" /><span>对话</span></button>
         <button type="button" aria-current={tab === 'album' ? 'page' : undefined} onClick={() => changeTab('album')}><ProductIcon name="album" /><span>画册</span></button>
@@ -209,7 +209,7 @@ export default function JudgeDemo() {
         {callOpen && <JudgeCall name={companion.name} src={companionSrc} label={companion.label} nextText={next?.user} lastReply={lastReply} lastUser={lastUser} pending={pending} onSend={send} onClose={closeCall} />}
         <section className="product-chat" aria-label="对话记录" hidden={tab !== 'chat' || callOpen}>
           <header className="messenger-header"><div className="messenger-contact"><ChatAvatar src={companionSrc} /><div><h1>{companion.name}</h1><p>AI 记录伙伴</p></div></div><div className="messenger-header-actions"><span className="messenger-offline">预设示例</span><JudgeCompanionPicker id={companionId} onSelect={setCompanionId} /><details className="product-settings"><summary aria-label="聊天设置" title="聊天设置">聊天设置<ProductIcon name="more" /></summary><div className="messenger-settings-panel"><h2>聊天设置</h2><p>预设示例 · 消息与回复按固定流程推进。</p><button type="button" onClick={reset}>重置这段对话</button></div></details></div></header>
-          <div className="judge-intro"><p>{visitOpen ? '下一次见面：用昨天修正后的记录，接上今天的话。' : `用 ${DEMO_ROUNDS.length} 次发送，体验被记住、被理解，也能纠正知知的对话。`}</p><span>所有内容均为合成示例，点击发送即可继续。</span>{visitOpen && <button type="button" className="judge-source-button" disabled={pending} onClick={() => setVisitOpen(false)}>← 回看昨天的对话</button>}{!visitOpen && visitStarted && <button type="button" className="judge-source-button" disabled={pending} onClick={openNextVisit}>接着下一次见面 ↗</button>}</div>
+          <div className="judge-intro"><p>{visitOpen ? '昨天说过的，今天接着聊。' : `你说过的，${companion.name}会认真记着。理解可以修正，原话始终保留。`}</p><span>{visitOpen ? '用昨天修正后的记录接上今天。合成示例，点击发送继续。' : `合成示例 · 点击“发送”，用 ${DEMO_ROUNDS.length} 次发送体验完整对话。`}</span>{visitOpen && <button type="button" className="judge-source-button" disabled={pending} onClick={() => setVisitOpen(false)}>← 回看昨天的对话</button>}{!visitOpen && visitStarted && <button type="button" className="judge-source-button" disabled={pending} onClick={openNextVisit}>接着下一次见面 ↗</button>}</div>
           <div className="product-chat-scroll" ref={scroll}>
             <p className="product-day-divider">{visitOpen ? '10 月 5 日 · 晚上 · 预设后续片段' : '10 月 4 日 · 下午'}</p>
             <div className="product-thread">
@@ -247,11 +247,11 @@ export default function JudgeDemo() {
             renderRecord={record => <DemoAlbum key={record.date} record={record} corrected={record.date === DEMO_DATE && completed >= 3} companionName={companion.name} onChat={() => { if (!pending) setVisitOpen(record.date === NEXT_VISIT_DATE); changeTab('chat') }} onSource={openSource} onNextVisit={record.date === DEMO_DATE && completed === DEMO_ROUNDS.length && !pending ? openNextVisit : undefined} />} />
         </section>
         <section className="judge-daily-view screen-only" aria-label="日常生活记录" hidden={tab !== 'daily' || callOpen}>
-          <JudgeDaily key={run} completed={completed} companionName={companion.name} companionSrc={companionSrc} onChat={() => changeTab('chat')} onAlbum={() => { setSelectedDate(DEMO_DATE); changeTab('album') }} />
+          <JudgeDaily key={run} completed={completed} record={today} onSource={openSource} companionName={companion.name} companionSrc={companionSrc} onChat={() => changeTab('chat')} onAlbum={() => { setSelectedDate(DEMO_DATE); changeTab('album') }} />
         </section>
       </div>
     </div>
     <SourceDialog selection={source} onClose={() => setSource(null)} />
-    <dialog ref={detailsDialog} className="free-print-dialog product-details-dialog screen-only" aria-labelledby="judge-details-title"><p className="guided-section-index">渐知 · 有长期记忆的 AI 生活伙伴</p><h2 id="judge-details-title">关于这个演示</h2><dl><div><dt>怎样体验</dt><dd>点击发送推进五轮预设对话，核对理解变化，再翻开画册体验下一次见面；形象选择、电话和语音输入沿用原来的界面。</dd></div><div><dt>内容与语音</dt><dd>对话、画册与肖像是合成示例。语音按预设内容展示，不调用麦克风、识别服务或模型接口，也不播放声音。</dd></div><div><dt>日常记录</dt><dd>步数、静息心率和消费均为固定合成数据，可以按日期查看明细、单独隐藏来源。尚未连接手表或账单；数值不用于诊断健康或判断心情。</dd></div><div><dt>画册与保存</dt><dd>可以按月翻阅、查看原话依据并下载 .md。演示只保留本页进度，不读取个人聊天缓存；刷新或重新体验会从头开始。</dd></div></dl><AIPractice /><button type="button" className="product-details-close" onClick={() => detailsDialog.current?.close()}>知道了</button></dialog>
+    <dialog ref={detailsDialog} className="free-print-dialog product-details-dialog screen-only" aria-labelledby="judge-details-title"><p className="guided-section-index">渐记 · 有长期记忆的 AI 生活伙伴</p><h2 id="judge-details-title">关于这个演示</h2><dl><div><dt>怎样体验</dt><dd>点击发送推进五轮预设对话，核对理解变化，再翻开画册体验下一次见面；形象选择、电话和语音输入沿用原来的界面。</dd></div><div><dt>内容与语音</dt><dd>对话、画册与肖像是合成示例。语音按预设内容展示，不调用麦克风、识别服务或模型接口，也不播放声音。</dd></div><div><dt>日常记录</dt><dd>步数、静息心率和消费均为固定合成数据，可以按日期查看明细、单独隐藏来源。尚未连接手表或账单；数值不用于诊断健康或判断心情。</dd></div><div><dt>画册与保存</dt><dd>可以按月翻阅、查看原话依据并下载 .md。演示只保留本页进度，不读取个人聊天缓存；刷新或重新体验会从头开始。</dd></div></dl><AIPractice /><button type="button" className="product-details-close" onClick={() => detailsDialog.current?.close()}>知道了</button></dialog>
   </main>
 }
