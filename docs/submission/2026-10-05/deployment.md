@@ -4,6 +4,8 @@
 
 ## 创空间设置
 
+用户已选择比赛推荐的魔搭创空间提交方式。按当前已准备的源码部署配置，建议使用 Docker SDK。完整源码包：[jianji-modelscope-source-2026-10-05.zip](https://github.com/cyxhrh/soul-album/releases/download/submission-2026-10-05/jianji-modelscope-source-2026-10-05.zip)。解压后根目录直接包含 Dockerfile；ZIP 文件本身不是空间入口，需将其中源码同步到空间代码仓库。
+
 1. 队友登录自己的 ModelScope 账号，创建公开创空间；选择 **Docker SDK**。
 2. Docker 创建要求绑定阿里云账号并完成实名认证。计算资源从当前页面提供的可用选项里选择免费 CPU 项；硬件名称和费用以创建页面为准，不固定承诺某个规格免费。
 3. 将本分支文件同步到创空间代码仓库根目录。根目录需要 `Dockerfile`、`.dockerignore`、`package.json`、`package-lock.json`、`src/`、`shared/`、`public/`、TypeScript/Vite 配置，以及 `deploy/modelscope/nginx.conf`。保留其余已有源码即可。
@@ -12,6 +14,10 @@
 6. 提交代码并部署，依次检查构建日志、运行日志和应用预览。无需新增 `ms_deploy.json`，本配置按 Docker SDK 的根文件流程部署。
 
 官方依据：[ModelScope 官方创空间部署说明](https://github.com/modelscope/modelscope-skills/blob/main/skills/ms-studio-deploy/SKILL.md)。账号要求、硬件和页面选项仍以实际创建界面为准。
+
+创建信息建议：显示名“渐记”，仓库名 `jianji`（以账号内可用名称为准），可见性“公开”。资源选当前页面明确提供的免费 CPU 项即可，预设评委流程不需要 GPU 或模型密钥。若页面要求阿里云绑定与实名，请由账号持有人完成。
+
+部署成功后，填写的是实际空间项目页面地址 `https://modelscope.cn/studios/<实际账号>/<实际空间名>`。此处只是格式说明，不是已创建地址。模型、数据集、Notebook、MCP、Skill、实践内容等选填字段没有对应公开作品时留空。
 
 ## 获取提交版本
 
