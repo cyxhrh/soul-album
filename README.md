@@ -1,6 +1,6 @@
 # 渐记 · 产品 Demo 与本地后端核心
 
-**2026-10-05 比赛提交准备包**：[从这里开始](docs/submission/2026-10-05/README.md)。包括可粘贴的表单文案、AI 实践说明、截图、Markdown 样例、魔搭部署文件与队友验收清单。[下载材料与静态站点](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)。应用字段填已上线的 [渐记创空间](https://modelscope.cn/studios/Cy189789/jianji)，实践内容字段填已发布的 [渐记实践文章](https://modelscope.cn/posts/437111)。产品长图已插入正文并通过公开访问核对；海报和完整 90 秒宣传片仍保留查看与下载链接，视频未内嵌，详见[发布记录](docs/submission/2026-10-05/spotlight/README.md)。
+**2026-10-05 比赛提交准备包**：[从这里开始](docs/submission/2026-10-05/README.md)。包括可粘贴的表单文案、AI 实践说明、截图、Markdown 样例、魔搭部署文件与队友验收清单。[下载材料与静态站点](https://github.com/cyxhrh/soul-album/releases/tag/submission-2026-10-05)。应用字段填已上线的 [渐记创空间](https://modelscope.cn/studios/Cy189789/jianji)。[渐记实践文章](https://modelscope.cn/posts/437111)已发布，但当前赛事“实践内容”选填栏拒绝官网实际使用的 `/posts/` 地址，仅提示接受 `/spotlight/`；该栏先留空，真实文章链接保留在补充材料中，等待赛事方确认兼容入口。产品长图已插入正文并通过公开访问核对；海报和完整 90 秒宣传片仍保留查看与下载链接，视频未内嵌，详见[发布记录](docs/submission/2026-10-05/spotlight/README.md)。
 
 **最新评委体验**在 [`codex/teammate-frontend-integration` 分支](https://github.com/cyxhrh/soul-album/tree/codex/teammate-frontend-integration)：五轮预设对话、原话核对与理解修正、画册目录与两种阅读方式、下一次见面、知知表情，以及步数／静息心率／消费的日常页。原通话、语音输入和伙伴选择界面均保留；所有评委体验内容使用合成数据，无需后端或模型密钥。线上提交构建默认进入评委体验；本地开发打开 `/?demo=judge`。
 

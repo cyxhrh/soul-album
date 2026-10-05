@@ -1,5 +1,22 @@
 {
   "prepared_on": "2026-10-05",
+  "submission_field_compatibility": {
+    "checked_on": "2026-10-05",
+    "field_optional": true,
+    "reported_accepted_prefix": "https://modelscope.cn/spotlight/",
+    "reported_validation_evidence": "user_provided_submission_form_screenshot",
+    "article_url": "https://modelscope.cn/posts/437111",
+    "article_url_rejected": true,
+    "fabricated_alias_url": "https://modelscope.cn/spotlight/437111",
+    "fabricated_alias_browser_redirect_url": "https://modelscope.cn/models/spotlight/437111",
+    "fabricated_alias_status": "404_in_browser",
+    "official_article_detail_route": "/posts/${e.Id}",
+    "source": "https://cdn.modelscope.cn/static/assets/spotlight-DDixtTFP.js",
+    "outdated_validator_is_unconfirmed_hypothesis": true,
+    "recommended_action": "leave_optional_field_empty_pending_organizer_confirmation",
+    "article_link_preservation": "retain_real_posts_url_in_project_description_or_supplementary_materials",
+    "submission_validated": false
+  },
   "media": [
     {
       "file": "assets/jianji-poster.png",
