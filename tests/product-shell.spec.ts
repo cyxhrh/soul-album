@@ -1,22 +1,46 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './offline-model'
 
 test.use({ timezoneId: 'Asia/Shanghai' })
+
+async function openAlbumTools(page: import('@playwright/test').Page) {
+  const tools = page.locator('.product-album-tools')
+  if (!(await tools.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await tools.locator(':scope > summary').click()
+  }
+}
 
 test('the conversation is home and an unfinished draft survives tab changes', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('region', { name: '对话记录' })).toBeVisible()
-  await expect(page.getByText('演示版会将一般消息记入画册；可随时修改或删除。')).toBeVisible()
-  await expect(page.getByRole('navigation', { name: '产品导航' }).getByRole('button')).toHaveCount(3)
-  await expect(page.getByText('今天有什么想记下的？')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: '发送消息' })).toBeVisible()
+  await expect(page.locator('.product-nav-links button')).toHaveCount(3)
+  await expect(page.getByLabel('知知的开场白')).toBeVisible()
   await page.getByRole('textbox', { name: '发送消息' }).fill('今天去了河边。')
   await page.getByRole('button', { name: '发送', exact: true }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天去了河边。')
   await page.getByRole('textbox', { name: '发送消息' }).fill('明天还想继续写')
   await page.getByRole('button', { name: '画册' }).click()
-  await expect(page.getByRole('article', { name: '第 1 天画册页' })).toContainText('今天去了河边。')
+  await expect(page.locator('.daily-album')).toContainText('今天去了河边。')
   await expect(page.getByRole('navigation', { name: '有记录日期' }).getByRole('button')).toHaveCount(1)
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '对话' }).click()
   await expect(page.getByRole('textbox', { name: '发送消息' })).toHaveValue('明天还想继续写')
+})
+
+test('timestamps stay in the conversation divider rather than sent bubbles', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-29T15:35:00Z'))
+  await page.goto('/')
+  await page.getByRole('textbox', { name: '发送消息' }).fill('时区校验用的合成句。')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  const conversation = page.getByRole('region', { name: '第 1 天对话' })
+  await expect(conversation.locator('.product-bubble-row.user time')).toHaveCount(0)
+  await expect(conversation.locator('.product-day-divider')).toContainText('2026年9月29日 星期二 23:35')
+
+  await page.reload()
+  await page.getByRole('textbox', { name: '发送消息' }).fill('跳过这一题')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  const control = page.getByRole('region', { name: '第 1 天对话' })
+  await expect(control.locator('.product-bubble-row.user time')).toHaveCount(0)
+  await expect(control.locator('.product-day-divider')).toContainText('2026年9月29日 星期二 23:35')
 })
 
 test('historical album browsing never advances the active invitation', async ({ page }) => {
@@ -30,10 +54,53 @@ test('historical album browsing never advances the active invitation', async ({ 
   await page.getByRole('button', { name: '发送', exact: true }).click()
   await page.getByRole('button', { name: '画册' }).click()
   await page.getByRole('button', { name: '查看第 1 天' }).click()
-  await expect(page.getByRole('article', { name: '第 1 天画册页' })).toBeVisible()
+  await expect(page.locator('.daily-album')).toContainText('第一天的原话。')
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '对话' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('第 2 天 · 第 1 题')
   await expect(page.getByRole('textbox', { name: '发送消息' })).toBeVisible()
+})
+
+test('private album opens as a two-page book and turns only between recorded days', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await page.getByRole('textbox', { name: '发送消息' }).fill('第一天留下的一句话。')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await page.getByText('邀请节奏与演示日期').click()
+  await page.getByRole('button', { name: '推进到第 2 天' }).click()
+  await page.getByRole('textbox', { name: '发送消息' }).fill('第二天留下的一句话。')
+  await page.getByRole('button', { name: '发送', exact: true }).click()
+  await page.getByRole('button', { name: '画册' }).click()
+
+  const book = page.getByRole('group', { name: '双页翻书画册' })
+  await expect(book.getByRole('region', { name: '第 1 天画册预览' })).toContainText('第一天留下的一句话。')
+  await expect(book.locator('.daily-album')).toContainText('第二天留下的一句话。')
+  await expect(book).not.toContainText('24℃')
+  await page.getByRole('button', { name: '翻到前一个有记录日期' }).click()
+  await expect(book.locator('.daily-album')).toContainText('第一天留下的一句话。')
+  await expect(book.getByRole('region', { name: '画册扉页' })).toContainText('谢谢你，愿意为今天停一停')
+  await expect(page.getByRole('button', { name: '翻到前一个有记录日期' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '翻到后一个有记录日期' })).toBeEnabled()
+  await page.getByRole('button', { name: '翻到后一个有记录日期' }).click()
+  await expect(book.locator('.daily-album')).toContainText('第二天留下的一句话。')
+  await expect(page.getByRole('button', { name: '翻到后一个有记录日期' })).toBeDisabled()
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await expect(page.locator('.album-book-page-left')).toBeHidden()
+  await book.getByRole('button', { name: '原话与理解', exact: true }).click()
+  await book.getByText('档案信息', { exact: true }).click()
+  await expect(book.locator('.daily-file-info')).toContainText('本机浏览器中的记录')
+  const toolEntry = page.locator('.product-album-tools > summary')
+  await expect(toolEntry).toBeVisible()
+  await toolEntry.click()
+  await expect(page.getByRole('region', { name: '记录管理' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
+    .toBeLessThanOrEqual(0)
+
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.locator('.album-book-page-left')).toBeHidden()
+  await expect(page.locator('.album-book-controls')).toBeHidden()
+  await expect(page.locator('.product-album-tools')).toBeHidden()
+  await expect(book.locator('.daily-album')).toBeVisible()
 })
 
 test('editing and deleting an answer updates the conversation and album together', async ({ page }) => {
@@ -43,6 +110,8 @@ test('editing and deleting an answer updates the conversation and album together
   await page.getByRole('textbox', { name: '发送消息' }).fill(old)
   await page.getByRole('button', { name: '发送', exact: true }).click()
   await page.getByRole('button', { name: '画册' }).click()
+  await expect(page.locator('.product-album-tools')).not.toHaveAttribute('open', '')
+  await page.locator('.product-album-tools > summary').click()
   await page.getByRole('button', { name: '修改这条原话' }).click()
   await page.getByRole('textbox', { name: '修改原话' }).fill(revised)
   await page.getByRole('button', { name: '保存修改' }).click()
@@ -51,12 +120,13 @@ test('editing and deleting an answer updates the conversation and album together
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(old)
   await page.getByRole('button', { name: '画册' }).click()
   await page.getByRole('button', { name: '删除这条原话' }).click()
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await page.getByRole('button', { name: '继续删除' }).click()
+  await expect(page.getByRole('heading', { name: '日子，值得慢慢翻阅。' })).toBeVisible()
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '对话' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(revised)
 })
 
-test('data consent is per source and refresh clears both consent and private words', async ({ page }) => {
+test('data consent is per source and refresh restores private words but resets simulated consent', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('textbox', { name: '发送消息' }).fill('只在此页停留的字。')
   await page.getByRole('button', { name: '发送', exact: true }).click()
@@ -69,7 +139,7 @@ test('data consent is per source and refresh clears both consent and private wor
   await page.getByRole('button', { name: '生活数据' }).click()
   await expect(page.getByRole('img', { name: /手表步数七日图表/ })).toBeVisible()
   await page.reload()
-  await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText('只在此页停留的字。')
+  await expect(page.getByRole('region', { name: '对话记录' })).toContainText('只在此页停留的字。')
   await page.getByRole('button', { name: '生活数据' }).click()
   await expect(page.getByRole('img', { name: /七日图表/ })).toHaveCount(0)
 })
@@ -99,9 +169,9 @@ for (const width of [375, 1440]) {
     if (width === 375) {
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
       const nav = await page.getByRole('navigation', { name: '产品导航' }).boundingBox()
-      const lastNote = await page.locator('.data-footer-note').boundingBox()
-      expect(lastNote).not.toBeNull()
-      expect(lastNote!.y + lastNote!.height).toBeLessThanOrEqual(nav!.y)
+      const details = await page.locator('.data-page-details > summary').boundingBox()
+      expect(details).not.toBeNull()
+      expect(details!.y + details!.height).toBeLessThanOrEqual(nav!.y)
     }
   })
 }
@@ -130,7 +200,7 @@ for (const [width, height] of [[375, 812], [320, 568]] as const) {
       await page.getByRole('button', { name: '发送', exact: true }).click()
     }
     await expect(page.getByRole('status')).toContainText('今天的记录已写入画册')
-    await expect(page.getByText('演示版会将一般消息记入画册；可随时修改或删除。')).toBeVisible()
+    await expect(page.getByText('邀请节奏与演示日期')).toBeVisible()
     const nav = await page.getByRole('navigation', { name: '产品导航' }).boundingBox()
     const composer = await page.locator('.product-composer').boundingBox()
     expect(nav).not.toBeNull()
@@ -154,6 +224,7 @@ test('album comparison follows its selected day and never previews later days', 
     await page.getByRole('button', { name: '发送', exact: true }).click()
   }
   await page.getByRole('button', { name: '画册' }).click()
+  await openAlbumTools(page)
   const comparison = page.getByRole('region', { name: '前后两页摘录' })
   await expect(comparison).toContainText('从不同记录日亲手选择两条原话')
   await expect(comparison).toContainText('不判断话题是否相关')
@@ -185,6 +256,7 @@ test('private excerpts label unrelated answer pairs and simulated times without 
   await message.fill('今天又走到河边。')
   await send.click()
   await page.getByRole('button', { name: '画册' }).click()
+  await openAlbumTools(page)
   const excerpts = page.getByRole('region', { name: '前后两页摘录' })
   await excerpts.getByLabel('较早的一条').selectOption({ index: 2 })
   await excerpts.getByLabel('当前页的一条').selectOption({ index: 1 })
@@ -192,6 +264,7 @@ test('private excerpts label unrelated answer pairs and simulated times without 
   await expect(excerpts).toContainText('今天又走到河边。')
   await expect(excerpts).toContainText('不判断话题是否相关')
   await expect(excerpts).not.toContainText('同一主题')
+  await page.getByText('原话与观察依据', { exact: true }).click()
   const album = page.getByRole('article', { name: '第 2 天画册页' })
   await expect(album).toContainText('演示日期时间')
   await expect(album).toContainText('本次录入时间')
@@ -214,6 +287,7 @@ test('the reader can compare two personally chosen notes, including proactive re
   await message.fill('今天处理了公交卡。')
   await send.click()
   await page.getByRole('button', { name: '画册' }).click()
+  await openAlbumTools(page)
   const comparison = page.getByRole('region', { name: '前后两页摘录' })
   await expect(comparison).toContainText('请选择两条原话')
   await comparison.getByLabel('较早的一条').selectOption({ index: 1 })
@@ -227,7 +301,7 @@ test('the reader can compare two personally chosen notes, including proactive re
   await expect(comparison).not.toContainText('今天处理了公交卡。')
 })
 
-test('one message composer handles brief control phrases without putting them in the album', async ({ page }) => {
+test('one message composer keeps control phrases as conversations without deriving a diary', async ({ page }) => {
   await page.goto('/')
   const message = page.getByRole('textbox', { name: '发送消息' })
   const send = page.getByRole('button', { name: '发送', exact: true })
@@ -243,7 +317,9 @@ test('one message composer handles brief control phrases without putting them in
   await send.click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天先不聊了')
   await page.getByRole('button', { name: '画册' }).click()
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await page.getByRole('button', { name: '原话与理解', exact: true }).click()
+  await expect(page.locator('.daily-message-user').last()).toContainText('今天先不聊了')
+  await expect(page.locator('.daily-status')).toHaveText('原话已收录')
 })
 
 test('a mixed-content sentence and a later unsolicited message both become ordinary records', async ({ page }) => {
@@ -257,6 +333,8 @@ test('a mixed-content sentence and a later unsolicited message both become ordin
   await message.fill('今天的问题说完了，我还想留下一句。')
   await send.click()
   await page.getByRole('button', { name: '画册' }).click()
+  await openAlbumTools(page)
+  await page.getByText('原话与观察依据', { exact: true }).click()
   const album = page.getByRole('article', { name: '第 1 天画册页' })
   await expect(album).toContainText('今天不想答但我想记一件事：去了公园。')
   await expect(album).toContainText('今天的问题说完了，我还想留下一句。')
@@ -280,21 +358,25 @@ test('an optional third question can be requested and declined without settling 
   await page.getByText('邀请节奏与演示日期').click()
   await page.getByRole('button', { name: '推进到第 2 天' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('第 2 天 · 第 1 题')
-  await expect(page.locator('.product-header-meta')).toContainText('每日两问')
+  await expect(page.locator('.product-settings')).not.toHaveAttribute('open')
+  await page.getByText('邀请节奏与演示日期').click()
+  await expect(page.getByLabel('手动调整节奏')).toHaveValue('daily')
 })
 
 test('an unrelated note does not rewrite the question already shown in the conversation', async ({ page }) => {
   await page.goto('/')
   const message = page.getByRole('textbox', { name: '发送消息' })
   const send = page.getByRole('button', { name: '发送', exact: true })
+  const initialQuestion = await page.getByLabel('知知的开场白').locator('p').last().innerText()
   await message.fill('随手记：下班时看到晚霞。')
   await send.click()
-  await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天有什么想记下的？')
+  await expect(page.getByRole('region', { name: '对话记录' })).toContainText(initialQuestion)
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText('你之前说“随手记：下班时看到晚霞。”')
   await message.fill('今天整理了书桌。')
   await send.click()
   await page.getByRole('button', { name: '画册' }).click()
-  await expect(page.getByRole('region', { name: '已回答问题' })).toContainText('今天有什么想记下的？')
+  await openAlbumTools(page)
+  await expect(page.getByRole('region', { name: '已回答问题' })).toContainText(initialQuestion)
 })
 
 test('editing a cited record keeps its old wording out of a skipped-question bubble', async ({ page }) => {
@@ -308,9 +390,10 @@ test('editing a cited record keeps its old wording out of a skipped-question bub
   await page.getByRole('button', { name: '推进到第 2 天' }).click()
   await message.fill('跳过这一题')
   await send.click()
-  await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(old)
+  await expect(page.getByRole('region', { name: '第 2 天对话' })).not.toContainText(old)
   await page.getByRole('button', { name: '画册' }).click()
   await page.getByRole('button', { name: '查看第 1 天' }).click()
+  await openAlbumTools(page)
   await page.getByRole('button', { name: '修改这条原话' }).click()
   await page.getByRole('textbox', { name: '修改原话' }).fill('现在保留的新词。')
   await page.getByRole('button', { name: '保存修改' }).click()

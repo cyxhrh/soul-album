@@ -56,8 +56,8 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <div>
-            <h1>心灵画册</h1>
-            <span>SOUL ALBUM</span>
+            <h1>渐记</h1>
+            <span>AI 生活伙伴</span>
           </div>
         </div>
         <span className="header-aside">把日子留在自己手里</span>
@@ -68,7 +68,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           <div className="hero-copy">
             <p className="eyebrow"><span className="eyebrow-line" aria-hidden="true" /> 合成引导剧情现可体验</p>
             <h2 id="hero-title">每天聊几句，<br /><em>慢慢看见自己。</em></h2>
-            <p className="tagline">每天问一点，慢慢看见自己</p>
+            <p className="tagline">慢慢认识你，陪你看见自己</p>
             <p className="hero-description">不用写长篇日记。走进阿禾的合成故事，依次收录两句预设回答，看原话变成日页；翻看来源，觉得不对就纠正暂定观察。右侧是静态合成预览。</p>
             <div className="hero-actions">
               <button className="primary-button" type="button" onClick={() => onNavigate('看引导演示')}>
@@ -98,7 +98,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           </ol>
         </section>
       </main>
-      <footer className="site-footer"><span>心灵画册</span><span>让你更了解自己，也让它更懂你。</span></footer>
+      <footer className="site-footer"><span>渐记</span><span>慢慢认识你，陪你看见自己。</span></footer>
     </div>
   )
 }

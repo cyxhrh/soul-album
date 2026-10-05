@@ -81,7 +81,7 @@ $saved = $false
 $saveFailed = $false
 
 try {
-  $form.Text = '心灵画册 · 保存百炼 Key'
+  $form.Text = '渐记 · 保存百炼 Key'
   $form.ClientSize = [Drawing.Size]::new(480, 206)
   $form.FormBorderStyle = [Windows.Forms.FormBorderStyle]::FixedDialog
   $form.MaximizeBox = $false
@@ -137,7 +137,7 @@ try {
     if (Save-KeyFromTextBox -InputBox $inputBox -StatusLabel $statusLabel -DestinationPath $keyPath) {
       $script:saved = $true
       try {
-        [Windows.Forms.MessageBox]::Show('已加密保存到当前 Windows 账户。以后启动本地模型服务会自动读取。', '心灵画册 · 保存成功', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        [Windows.Forms.MessageBox]::Show('已加密保存到当前 Windows 账户。以后启动本地模型服务会自动读取。', '渐记 · 保存成功', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Information) | Out-Null
       } catch {
         # Saving has already succeeded; a notification failure must not change
         # the outcome or reveal details of the secret operation.
@@ -150,7 +150,7 @@ try {
   })
 
   if ($SelfTest) {
-    if ($form.Text -ne '心灵画册 · 保存百炼 Key' -or
+    if ($form.Text -ne '渐记 · 保存百炼 Key' -or
         -not $inputBox.UseSystemPasswordChar -or
         $form.AcceptButton -ne $saveButton -or
         $form.CancelButton -ne $cancelButton) {
@@ -198,7 +198,7 @@ try {
   if ($SelfTest) {
     [Console]::Error.WriteLine('GUI self-test failed: ' + $_.Exception.GetType().Name + ' at line ' + $_.InvocationInfo.ScriptLineNumber)
   } else {
-    [Windows.Forms.MessageBox]::Show('无法打开或保存百炼 Key。请关闭窗口后重试。', '心灵画册', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
+    [Windows.Forms.MessageBox]::Show('无法打开或保存百炼 Key。请关闭窗口后重试。', '渐记', [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Error) | Out-Null
   }
   $exitCode = 2
 } finally {

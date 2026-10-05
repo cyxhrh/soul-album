@@ -1,10 +1,11 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './offline-model'
 
 test.use({ timezoneId: 'Asia/Shanghai' })
 
 async function openProduct(page: Page) {
   await page.goto('/')
-  await expect(page.getByRole('main', { name: '心灵画册产品' })).toBeVisible()
+  await expect(page.getByRole('main', { name: '渐记产品' })).toBeVisible()
 }
 
 async function chat(page: Page) {
@@ -13,6 +14,14 @@ async function chat(page: Page) {
 
 async function album(page: Page) {
   await page.getByRole('navigation', { name: '产品导航' }).getByRole('button', { name: '画册' }).click()
+  const tools = page.locator('.product-album-tools')
+  if (await tools.count() && !(await tools.evaluate((element) => (element as HTMLDetailsElement).open))) {
+    await tools.locator(':scope > summary').click()
+  }
+  const evidence = page.locator('.daily-legacy-evidence')
+  if (await evidence.count() && !(await evidence.evaluate(element => (element as HTMLDetailsElement).open))) {
+    await evidence.locator(':scope > summary').click()
+  }
 }
 
 async function advanceTo(page: Page, day: number) {
@@ -32,7 +41,7 @@ async function answer(page: Page, text: string) {
 test('skipping the first question offers a different second one, including after a prior record', async ({ page }) => {
   await openProduct(page)
   const conversation = page.getByRole('region', { name: '对话记录' })
-  await expect(conversation).toContainText('今天有什么想记下的？')
+  await expect(conversation.getByLabel('知知的开场白')).toBeVisible()
   await answer(page, '换个问题')
   await expect(conversation).toContainText('今天有没有一个小瞬间想留在画册里？')
   await answer(page, '看到了阳台上的小鸟。')
@@ -62,7 +71,9 @@ test('control messages stay in the conversation but never create an empty diary 
   await answer(page, '今天先不聊了')
   await expect(page.getByRole('region', { name: '对话记录' })).toContainText('今天先不聊了')
   await album(page)
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await expect(page.locator('.daily-status')).toHaveText('原话已收录')
+  await page.getByRole('button', { name: '原话与理解', exact: true }).click()
+  await expect(page.locator('.daily-message-user').last()).toContainText('今天先不聊了')
 })
 
 test('a sentence containing control words is kept as the reader’s own record', async ({ page }) => {
@@ -86,7 +97,7 @@ test('free text on a day without an invitation still becomes a diary record', as
     .toContainText('没有问题也可以随手记下雨停了。')
 })
 
-test('private answers stay in page memory, never in requests or browser storage', async ({ page }) => {
+test('offline answers stay in the browser cache and never enter model requests or console logs', async ({ page }) => {
   const sentinel = 'PRIVATE_SENTINEL_928_山茶花'
   const requests: Promise<string>[] = []
   const errors: string[] = []
@@ -108,18 +119,18 @@ test('private answers stay in page memory, never in requests or browser storage'
     session: JSON.stringify({ ...sessionStorage }),
     indexedDbNames: (await indexedDB.databases()).map((database) => database.name ?? ''),
   }))
-  expect(storage.local).toBe('{}')
+  expect(storage.local).toContain('jianzhi:local-session:v1')
+  expect(storage.local).toContain(sentinel)
   expect(storage.session).toBe('{}')
   expect(storage.indexedDbNames).toEqual([])
-  expect(JSON.stringify(storage)).not.toContain(sentinel)
   expect((await Promise.all(requests)).join('\n')).not.toContain(sentinel)
   expect(consoleMessages.join('\n')).not.toContain(sentinel)
   expect(errors).toEqual([])
 
   await page.reload()
-  await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(sentinel)
+  await expect(page.getByRole('region', { name: '对话记录' })).toContainText(sentinel)
   await album(page)
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await expect(page.getByRole('article', { name: '第 1 天画册页' })).toContainText(sentinel)
   expect((await Promise.all(requests)).join('\n')).not.toContain(sentinel)
   expect(errors).toEqual([])
 })
@@ -145,7 +156,7 @@ test('deleting day one withdraws a later title copied from its answer and remove
   await expect(page.locator('.free-status')).toContainText('1 个日页标题及其修订历史已撤下')
   await expect(page.getByRole('article', { name: '第 2 天画册页' })).not.toContainText(secret)
   await page.emulateMedia({ media: 'print' })
-  await expect(page.locator('.print-page:visible')).not.toContainText(secret)
+  await expect(page.locator('.daily-album:visible')).not.toContainText(secret)
 })
 
 for (const action of ['修改', '删除'] as const) {
@@ -271,9 +282,10 @@ test('clear removes words and simulated consents; archived demo routes cannot re
   await page.getByRole('button', { name: '开启手表步数模拟授权' }).click()
   await expect(page.getByRole('img', { name: /手表步数七日图表/ })).toBeVisible()
   await page.getByRole('button', { name: '清除本次内容' }).click()
+  await page.getByRole('button', { name: '确认清除本机记录' }).click()
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText(sentinel)
   await album(page)
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '日子，值得慢慢翻阅。' })).toBeVisible()
   await page.getByRole('button', { name: '生活数据' }).click()
   await expect(page.getByRole('img', { name: /七日图表/ })).toHaveCount(0)
   await page.goto('/?demo=story')
@@ -300,8 +312,9 @@ test('deletion scrubs an answer from questions, album comparison and print', asy
   await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText(secret)
   await page.getByRole('button', { name: '查看第 1 天' }).click()
   await page.getByRole('button', { name: '删除这条原话' }).click()
+  await page.getByRole('button', { name: '继续删除' }).click()
   await expect(page.getByRole('dialog', { name: '确认撤下日页标题' })).toHaveCount(0)
-  await expect(page.getByRole('main', { name: '心灵画册产品' })).not.toContainText(secret)
+  await expect(page.getByRole('main', { name: '渐记产品' })).not.toContainText(secret)
   await expect(page.getByRole('region', { name: '前后两页摘录' })).toContainText('资料不足')
   await expect(page.getByRole('region', { name: '已回答问题' })).toContainText('引用已删除')
   await page.getByRole('button', { name: '对话', exact: true }).click()
@@ -309,7 +322,7 @@ test('deletion scrubs an answer from questions, album comparison and print', asy
   await expect(page.getByRole('region', { name: '对话记录' })).not.toContainText('关联第 1 天 · 「PRIVATE_DELETE_928_我在旧书店停留」')
   await album(page)
   await page.emulateMedia({ media: 'print' })
-  await expect(page.locator('.print-page:visible')).not.toContainText(secret)
+  await expect(page.locator('.daily-album:visible')).not.toContainText(secret)
 })
 
 test('a recorded entry shows the reader local hour', async ({ page }) => {
@@ -320,9 +333,10 @@ test('a recorded entry shows the reader local hour', async ({ page }) => {
   const recorded = await page.getByRole('article', { name: '第 1 天画册页' }).innerText()
   expect(recorded).toMatch(new RegExp('演示日期时间 \\d{4}年\\d+月\\d+日 ' + localHour + ':'))
   expect(recorded).toContain('本次录入时间')
-  expect(recorded).toContain('演示日期：')
+  await page.getByRole('button', { name: '详情 ↓' }).click()
+  await expect(page.getByRole('region', { name: '页面详情' })).toContainText('演示日期：')
   await page.emulateMedia({ media: 'print' })
-  await expect(page.locator('.print-page:visible')).toContainText('演示日期：')
+  await expect(page.locator('.daily-album:visible')).toBeVisible()
 })
 
 test('an unfinished message draft persists across tabs and explicit day advance without auto-saving', async ({ page }) => {
@@ -334,7 +348,7 @@ test('an unfinished message draft persists across tabs and explicit day advance 
   await advanceTo(page, 2)
   await expect(page.getByRole('textbox', { name: '发送消息' })).toHaveValue('只准备写在第一天的草稿。')
   await album(page)
-  await expect(page.getByText('画册还没有第一页')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '日子，值得慢慢翻阅。' })).toBeVisible()
   await chat(page)
   await page.getByRole('button', { name: '发送', exact: true }).click()
   await album(page)

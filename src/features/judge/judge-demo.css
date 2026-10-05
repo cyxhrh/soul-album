@@ -1,0 +1,104 @@
+.judge-demo .judge-header-actions { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; justify-content: flex-end; }
+.judge-badge { padding: 5px 9px; border: 1px solid #dce5d5; border-radius: 5px; color: #60745b; font-size: 11px; white-space: nowrap; }
+.judge-header-actions button, .judge-text-button, .judge-record-link button { border: 0; background: transparent; color: #47765b; cursor: pointer; font: inherit; font-size: 12px; padding: 8px 0; }
+.judge-demo button:focus-visible, .judge-demo summary:focus-visible { outline: 2px solid #47765b; outline-offset: 3px; }
+.judge-nav-note { margin: auto 10px 0; color: #6e7c68; }
+.judge-nav-note p { font-family: SimSun, serif; font-size: 15px; line-height: 2; }
+.judge-nav-note small { font-size: 10px; }
+.judge-intro { flex: none; padding: 14px max(28px, calc((100% - 800px) / 2)); border-bottom: 1px solid #e5e7df; background: #f7f8f3; }
+.judge-intro p { margin: 0 0 5px; font-size: 14px; line-height: 1.6; color: var(--text); }
+.judge-intro > span { font-size: 11px; color: #7b8576; }
+.judge-record-link { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 11px; color: #7b8576; }
+.judge-record-link button { font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
+.judge-complete { display: flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 80px; }
+.judge-complete strong { font-size: 14px; font-weight: 500; }
+.judge-complete p { margin: 8px 0 0; font-size: 12px; color: #71806b; }
+.judge-album-view { width: 100%; }
+.judge-markdown { margin: 30px 0 0; }
+.judge-markdown summary { cursor: pointer; font-size: 12px; color: #476747; padding: 8px 0; }
+.judge-markdown pre { max-height: 450px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 15px; border: 1px solid #dce2d5; border-radius: 5px; font-size: 12px; line-height: 1.7; background: #f3f4ed; }
+.judge-complete-actions { display: flex; align-items: center; gap: 10px; }
+.judge-demo .product-nav-foot { margin-top: 16px; }
+.judge-sticker-message { display: flex; align-items: flex-start; gap: 13px; min-width: 0; }
+.judge-sticker-image { display: block; width: 136px; height: 136px; max-width: calc(100% - 53px); object-fit: contain; transform-origin: left bottom; }
+.judge-sticker-enter .judge-sticker-image { animation: judge-sticker-in .24s cubic-bezier(.22, .7, .3, 1) both; }
+@keyframes judge-sticker-in {
+  from { opacity: 0; transform: translate(-4px, 8px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+.judge-demo .judge-source-button { display: inline-block; padding: 6px 0; border: 0; background: transparent; color: #3f664b; cursor: pointer; font: inherit; font-size: 12px; text-decoration: underline; text-underline-offset: 4px; line-height: 1.7; }
+.judge-demo .judge-source-button:disabled { opacity: .5; cursor: not-allowed; }
+.judge-intro .judge-source-button { display: block; }
+.judge-message-source { margin: -17px 0 6px 54px; }
+.judge-understanding-update { padding: 17px 20px; border: 1px solid var(--border); border-radius: 9px; background: #f7f8f2; color: var(--text); font-size: 13px; line-height: 1.8; }
+.product-thread > .judge-understanding-update { margin: 0 0 22px 54px; max-width: 610px; }
+.judge-insight-overline { margin: 0 0 12px; font-size: 11px; letter-spacing: .05em; color: #5f715a; }
+.judge-understanding-update dl { margin: 0; }
+.judge-understanding-update dl > div { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+.judge-understanding-update dd { margin: 0; overflow-wrap: anywhere; }
+.judge-understanding-update dd button { display: block; }
+.judge-understanding-withdrawn dd { color: var(--muted); }
+.judge-understanding-withdrawn del { text-decoration-thickness: 1px; text-decoration-color: var(--muted); }
+.judge-understanding-stated dd { font-weight: 500; }
+.judge-understanding-tentative dd { color: var(--muted); font-size: 12px; }
+.judge-understanding-update .judge-understanding-confirmed { margin-inline: -10px; padding: 10px; border-radius: 6px; background: var(--accent-soft); }
+.judge-understanding-confirmed dd { color: #36543f; font-weight: 600; }
+.judge-understanding-update dd .judge-source-button { font-weight: 400; }
+.judge-insight-status { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #e6efdf; color: #3e6040; font-size: 11px; font-weight: 400; white-space: nowrap; }
+.judge-insight-status.withdrawn { color: #6b6d65; background: #eaece5; }
+.judge-insight-status.tentative { color: #78623b; background: #f1e9d8; }
+.judge-insight-status.confirmed { background: var(--surface); color: #36543f; font-weight: 600; }
+.judge-demo .daily-portrait { margin: 20px 0 0; border: 0; padding-top: 0; }
+.judge-demo .daily-portrait > h3 { margin-top: 0; }
+.judge-portrait-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 15px 0 20px; }
+.judge-portrait-summary > div { padding: 15px 17px; border: 1px solid #e0e4d8; background: #fffdf8; border-radius: 7px; }
+.judge-demo .judge-portrait-summary h4 { margin: 0 0 7px; }
+.judge-demo .judge-portrait-summary p { margin: 0; }
+.judge-portrait-detail, .judge-transcript { margin-top: 22px; border-top: 1px solid #e0e4d8; padding-top: 12px; }
+.judge-portrait-detail > summary, .judge-transcript > summary { padding: 8px 0; cursor: pointer; color: #476047; font-size: 13px; }
+.judge-source-dialog, .judge-demo .product-details-dialog { max-height: 85dvh; overflow-y: auto; }
+.judge-source-dialog blockquote { margin: 20px 0; padding: 13px 17px; border-left: 3px solid #8da880; background: #f5f7ee; line-height: 1.9; overflow-wrap: anywhere; }
+.judge-source-dialog blockquote p { margin: 7px 0 0; }
+.judge-source-dialog small, .judge-source-date { font-size: 12px; color: #5f715a; }
+.judge-ai-practice { margin: 24px 0; padding: 12px 0; border-block: 1px solid #dbe2d2; }
+.judge-ai-practice > summary { cursor: pointer; font-size: 13px; color: #3f664b; padding: 8px 0; }
+.judge-ai-practice section { font-size: 13px; line-height: 1.9; overflow-wrap: anywhere; }
+.judge-ai-practice h3 { font-size: 17px; margin: 12px 0; }
+.judge-ai-practice h4 { font-size: 13px; margin: 22px 0 8px; }
+.judge-ai-practice blockquote { margin: 12px 0; border-left: 3px solid #8da880; padding: 12px 15px; background: #f3f6ed; }
+.judge-demo .judge-practice-boundaries { background: #f6f7f0; padding: 15px; border-radius: 6px; }
+.judge-demo .judge-message-enter { --message-enter-x: -4px; }
+.judge-demo .judge-message-enter.user { --message-enter-x: 4px; }
+.judge-demo .judge-message-enter .product-bubble { transform-origin: left bottom; animation: judge-message-in .24s cubic-bezier(.22, .7, .3, 1) both; }
+.judge-demo .judge-message-enter.user .product-bubble { transform-origin: right bottom; }
+.judge-demo .product-send { transition: transform .1s ease-out; }
+.judge-demo .product-send:active:not(:disabled) { transform: scale(.96); }
+@keyframes judge-message-in {
+  from { opacity: 0; transform: translate(var(--message-enter-x), 8px) scale(.985); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .judge-demo .judge-sticker-enter .judge-sticker-image { animation: none; }
+  .judge-demo .judge-message-enter .product-bubble { animation: none; }
+  .judge-demo .product-send { transition: none; }
+  .judge-demo .product-send:active:not(:disabled) { transform: none; }
+}
+@media (max-width: 760px) {
+  .judge-demo .product-nav-links { grid-template-columns: repeat(3, 1fr); }
+  .judge-nav-note { display: none; }
+  .judge-demo .judge-header-actions { gap: 5px; flex-direction: column; align-items: flex-end; }
+  .judge-header-actions button { padding: 5px 0; font-size: 11px; }
+  .judge-intro { padding: 10px 16px; }
+  .judge-intro p { font-size: 13px; }
+  .judge-intro > span { font-size: 10px; }
+  .judge-demo .messenger-input-hint span { display: inline; }
+  .judge-complete { min-height: 85px; }
+  .judge-complete .product-send { flex: none; }
+  .judge-demo .product-nav-foot { margin-top: 0; }
+  .judge-sticker-message { gap: 11px; }
+  .judge-sticker-image { width: 124px; height: 124px; max-width: calc(100% - 47px); }
+  .judge-portrait-summary { grid-template-columns: 1fr; gap: 10px; }
+  .product-thread > .judge-understanding-update { margin-left: 0; }
+  .judge-understanding-update { padding: 14px; }
+  .judge-understanding-update dl > div { grid-template-columns: 70px minmax(0, 1fr); gap: 8px; }
+}

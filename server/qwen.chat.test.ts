@@ -15,6 +15,24 @@ const request: PrivateChatRequest = {
 }
 
 describe('Qwen private chat provider', () => {
+  it('resolves the displayed opening for a short first answer without turning it into user facts', async () => {
+    let messages: Array<{ role: string; content: string }> = []
+    const fetcher: typeof fetch = async (_input, init) => {
+      messages = JSON.parse(String(init?.body)).messages
+      return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: {
+        content: '{"reply":"慢慢聊。","nextQuestion":null,"citations":[]}',
+      } }] }), { status: 200 })
+    }
+    await createQwenPrivateChatProviderFromEnv(env, fetcher)!.generate({
+      request: { turn: { ...request.turn, quote: '有点累' }, context: [], openingId: 'morning' },
+      signal: new AbortController().signal,
+    })
+    expect(JSON.parse(messages[1].content)).toMatchObject({
+      turn: { quote: '有点累' }, context: [],
+      opening: { greeting: '早上好呀 ☀️ 新的一天开始啦！', question: '今天有什么让你期待的安排？' },
+    })
+    expect(messages[0].content).toContain('语气跟随用户当前感受')
+  })
   it('does not exist without server-held key and an approved endpoint', () => {
     expect(createQwenPrivateChatProviderFromEnv({})).toBeUndefined()
     expect(createQwenPrivateChatProviderFromEnv({ DASHSCOPE_API_KEY: 'test-secret' })).toBeUndefined()

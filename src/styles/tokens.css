@@ -1,28 +1,47 @@
 :root {
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  color: #24332e;
-  background: #f7f4ed;
+  color: #242424;
+  background: #fbfaf7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  --paper: #f7f4ed;
-  --leaf: #fffdf8;
-  --ink: #24332e;
-  --green: #5c8c7b;
-  --edge: #ddd8cc;
-  --muted: #66736c;
-  --warm: #ba9360;
-  --display: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
-  --body: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* 方案 A · 纸墨日记 —— 规范见 docs/design/color-scheme.md */
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --text: #242424;
+  --muted: #757575;
+  --border: #e7e4de;
+  --accent: #c03d2a;
+  --accent-soft: #faeae6;
+  --on-accent: #ffffff;
+
+  --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+
+  /* Legacy demo and data-page styles still read these names. */
+  --paper: var(--bg);
+  --leaf: var(--surface);
+  --ink: var(--text);
+  --edge: var(--border);
+  --green: var(--accent);
+  --warm: var(--accent);
+  --display: var(--serif);
+
+  /*
+   * 方案 B · 深色暖光（备用，尚未启用；将来挂 [data-theme='dark'] 或
+   * @media (prefers-color-scheme: dark) 时取下列值替换上面 8 个色 token）
+   *   --bg:#161616; --surface:#222224; --text:#f5f5f7; --muted:#a1a1a6;
+   *   --border:#333336; --accent:#ff7a3d; --accent-soft:#3a2a1e; --on-accent:#161616;
+   */
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; }
+body { margin: 0; min-width: 0; }
 button { font: inherit; }
-:is(button, input, textarea, select):focus-visible { outline: 3px solid var(--warm); outline-offset: 4px; }
-::selection { background: #dce8df; color: var(--ink); }
+:is(button, input, textarea, select):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+::selection { background: var(--accent-soft); color: var(--text); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

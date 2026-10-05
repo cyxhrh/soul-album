@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { JournalState } from '../../domain/journal'
 import type { AlbumView } from '../../domain/selectors'
 
@@ -7,6 +7,13 @@ type AlbumPageProps = {
   album: AlbumView
   journal: JournalState
   dateForDay: (day: number) => string
+  displayDateForDay?: (day: number) => string
+  weather?: {
+    icon: string
+    summary: string
+    temperature: string
+    location: string
+  }
   entryLabels?: Readonly<Record<string, readonly string[]>>
   derivedObservation?: string | null
   onCorrect?: () => void
@@ -24,25 +31,70 @@ function SourcePhoto({ src, title }: { src: string; title: string }) {
     : <img src={src} alt={`合成照片：${title}`} onError={() => setFailed(true)} />
 }
 
-export default function AlbumPage({ mode, album, journal, dateForDay, entryLabels, derivedObservation, onCorrect }: AlbumPageProps) {
+export default function AlbumPage({
+  mode, album, journal, dateForDay, displayDateForDay, weather,
+  entryLabels, derivedObservation, onCorrect,
+}: AlbumPageProps) {
+  const detailPanelId = useId()
+  const [detailOpen, setDetailOpen] = useState(false)
   const [evidenceOpenId, setEvidenceOpenId] = useState<string | null>(null)
 
   return (
     <article className="story-album-page print-page" aria-label={`${dateForDay(album.day)}画册页`}>
       <div className="story-page-spine" aria-hidden="true" />
       <header className="story-page-header">
-        <p className="story-page-overline">SOUL ALBUM <span>·</span> {mode === 'private' ? '本次页面记录' : '合成演示'}</p>
         <div className="story-page-date-row">
           <div>
-            <p className="story-page-date">{dateForDay(album.day)}</p>
-            {mode === 'private' && album.entries.length > 0 &&
-              <p className="story-page-overline">演示日期：{album.entries[0].occurredAt.slice(0, 10)}</p>}
+            <p className="story-page-date">{displayDateForDay?.(album.day) ?? dateForDay(album.day)}</p>
             <h2>{album.titleRevision > 0 ? album.title : mode === 'private'
               ? album.entries.length > 0 ? '今天留下的原话' : '今天补充的准确背景'
               : '那天记下的事'}</h2>
           </div>
-          <span className="story-page-private">{mode === 'private' ? '本次页面记录' : '合成资料'}</span>
+          <div className="story-page-detail screen-only">
+            <button type="button" className="story-detail-toggle"
+              aria-expanded={detailOpen} aria-controls={detailPanelId}
+              onClick={() => setDetailOpen((open) => !open)}>
+              详情{detailOpen ? ' ↑' : ' ↓'}
+            </button>
+            {detailOpen && <div className="story-detail-panel" id={detailPanelId}
+              role="region" aria-label="页面详情">
+              <p className="story-detail-label">{mode === 'private' ? '本次页面记录' : '合成演示日页'}</p>
+              <p className="story-detail-note">{mode === 'private'
+                ? '默认只保留在本次页面；单次授权发送的片段可能由百炼保存。'
+                : '这里是固定合成剧情，不是用户的真实记录。'}</p>
+              {mode === 'private' && album.entries.length > 0 &&
+                <p className="story-detail-note">演示日期：{album.entries[0].occurredAt.slice(0, 10)}</p>}
+              {album.titleRevision > 0 &&
+                <p className="story-detail-note">标题修订第 {album.titleRevision} 版</p>}
+              {album.entries.length > 0 && <div className="story-detail-group">
+                <p className="story-detail-title">记录来源</p>
+                {album.entries.map((entry) => <p className="story-detail-note" key={entry.id}>
+                  来源：{entry.source} · {mode === 'private' ? '演示日期时间' : '发生'} {dateTime(entry.occurredAt)}
+                  {' · '}{mode === 'private' ? '本次录入时间' : '记录'} {dateTime(entry.recordedAt)}
+                  {entry.revision > 1 && ` · 原话修订第 ${entry.revision} 版`}
+                </p>)}
+              </div>}
+              {album.sources.length > 0 && <div className="story-detail-group">
+                <p className="story-detail-title">资料授权</p>
+                {album.sources.map((fact) => <div className="story-detail-item" key={fact.id}>
+                  <p>{fact.title} · 来源：{fact.source} · 设备：{fact.device}</p>
+                  <p>发生 {dateTime(fact.occurredAt)} · 收录 {dateTime(fact.recordedAt)}</p>
+                  <p>授权状态：已授权 · 更新 {dateTime(fact.consentUpdatedAt)}</p>
+                </div>)}
+              </div>}
+              {album.observations.length > 0 && <div className="story-detail-group">
+                <p className="story-detail-title">观察依据</p>
+                <p className="story-detail-note">这页有 {album.observations.length} 条当前有效的观察或纠正；
+                  可在每条下方展开对应的原话。记录不足以判断原因。</p>
+              </div>}
+            </div>}
+          </div>
         </div>
+        {weather && <aside className="story-weather" aria-label="天气记录">
+          <span className="story-weather-mark" aria-hidden="true">{weather.icon}</span>
+          <div><strong>{weather.summary} · {weather.temperature}</strong>
+            <small>{weather.location} · 固定演示天气，非实时查询</small></div>
+        </aside>}
         {mode === 'private' && <p className="story-page-revision">若曾单次授权发送片段，百炼可能留存该片段。</p>}
         {album.titleRevision > 0 && <p className="story-page-revision">标题修订第 {album.titleRevision} 版</p>}
       </header>
@@ -146,7 +198,7 @@ export default function AlbumPage({ mode, album, journal, dateForDay, entryLabel
       <footer className="story-page-footer">
         <span>{mode === 'private' && album.entries.length === 0
           ? '此页由你的纠正与有效原话整理 · 本次页面记录'
-          : `此页由当前有效回答整理 · ${mode === 'private' ? '本次页面记录' : '合成演示'}`}</span>
+          : `此页由当前有效${mode === 'private' ? '原话' : '回答'}整理 · ${mode === 'private' ? '本次页面记录' : '合成演示'}`}</span>
         <span>{mode === 'private' ? `第 ${album.day} 天` : `${String(album.day).padStart(2, '0')} / 09`}</span>
       </footer>
     </article>

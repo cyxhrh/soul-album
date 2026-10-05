@@ -1,0 +1,95 @@
+.judge-daily-page { width: 100%; min-width: 0; color: #26332b; background: #f7f8f4; }
+.judge-daily-content { max-width: 1080px; margin: 0 auto; padding: 34px clamp(20px, 4vw, 52px) 40px; }
+.judge-daily-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.judge-daily-eyebrow { margin: 0 0 10px; color: #62715e; font-size: 11px; letter-spacing: .06em; }
+.judge-daily-heading h2 { margin: 0; font-family: SimSun, serif; font-size: clamp(23px, 2.4vw, 30px); font-weight: 400; line-height: 1.5; }
+.judge-daily-time { margin: 10px 0 0; color: #63735e; font-size: 12px; }
+.judge-daily-sample-note { margin: 0; color: #71806b; font-size: 11px; line-height: 1.9; text-align: right; }
+.judge-daily-sample-note > span { display: block; }
+.judge-daily-date-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 26px 0; }
+.judge-daily-date-nav button { display: flex; align-items: center; gap: 8px; min-height: 39px; padding: 8px 13px; border: 1px solid #dfe4da; border-radius: 6px; background: transparent; color: #52705a; font: inherit; font-size: 12px; cursor: pointer; }
+.judge-daily-date-nav button[aria-current="date"] { border-color: #b1c7a3; background: #eaf0e4; color: #354e3a; }
+.judge-daily-date-nav button span { font-size: 10px; }
+.judge-daily-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.judge-daily-metric { min-width: 0; padding: 21px 20px 17px; border: 1px solid #dfe4da; border-radius: 10px; background: #fcfdf9; }
+.judge-daily-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.judge-daily-metric h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.judge-daily-icon { display: grid; place-items: center; width: 35px; height: 35px; color: #59735b; background: #eef2e9; border-radius: 8px; flex: none; }
+.judge-daily-number { display: flex; align-items: baseline; gap: 8px; margin: 15px 0 9px; }
+.judge-daily-number strong { font-size: clamp(30px, 3vw, 37px); font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+.judge-daily-number span { color: #697664; font-size: 11px; white-space: nowrap; }
+.judge-daily-number .judge-daily-hidden { color: #76826e; font-size: 26px; letter-spacing: 0; }
+.judge-daily-metric-note { margin: 0; min-height: 38px; color: #687761; font-size: 11px; line-height: 1.8; }
+.judge-daily-metric-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 5px 10px; margin-top: 16px; padding-top: 11px; border-top: 1px solid #e6e9e1; }
+.judge-daily-metric-foot small { color: #74816d; font-size: 10px; }
+.judge-daily-metric-foot button, .judge-daily-detail-heading button { padding: 5px 0; border: 0; background: transparent; color: #47765b; font: inherit; font-size: 11px; cursor: pointer; }
+.judge-daily-detail { margin-top: 18px; padding: 23px 26px; border: 1px solid #dfe4da; border-radius: 10px; background: #fcfdf9; }
+.judge-daily-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+.judge-daily-detail-heading h3 { margin: 0; font-size: 17px; font-weight: 500; }
+.judge-daily-detail-source { margin: 13px 0 0; color: #687761; font-size: 11px; line-height: 1.8; }
+.judge-daily-chart { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin: 25px 0 10px; }
+.judge-daily-chart-day { display: flex; align-items: center; flex-direction: column; gap: 9px; color: #6d7a65; font-size: 11px; min-width: 0; font-variant-numeric: tabular-nums; }
+.judge-daily-chart-track { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 90px; border-bottom: 1px solid #e3e7dd; }
+.judge-daily-chart-track > span { width: min(100%, 32px); border-radius: 4px 4px 0 0; background: #cddac4; }
+.judge-daily-chart-day.selected { color: #365a3e; }
+.judge-daily-chart-day.selected .judge-daily-chart-track > span { background: #779872; }
+.judge-daily-chart-value { font-size: 11px; }
+.judge-daily-chart-note { margin: 13px 0 20px; color: #72806b; font-size: 11px; line-height: 1.8; }
+.judge-daily-values { margin-top: 18px; border-top: 1px solid #e3e7dd; padding-top: 8px; }
+.judge-daily-values summary { padding: 8px 0; color: #547052; font-size: 12px; cursor: pointer; }
+.judge-daily-detail table { width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.7; }
+.judge-daily-detail caption { padding: 6px 0 11px; color: #6c7a65; font-size: 11px; text-align: left; }
+.judge-daily-detail th, .judge-daily-detail td { padding: 8px 10px; border-bottom: 1px solid #e6e9e1; text-align: left; font-weight: 400; }
+.judge-daily-detail th:last-child, .judge-daily-detail td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.judge-daily-detail thead { color: #708069; }
+.judge-daily-detail tbody tr.selected { background: #eef3e9; }
+.judge-daily-detail table small { color: #63745d; font-size: 10px; white-space: nowrap; }
+.judge-daily-expenses { margin-top: 25px; padding-top: 20px; border-top: 1px solid #e3e7dd; }
+.judge-daily-expenses h4 { margin: 0 0 7px; font-size: 14px; font-weight: 500; }
+.judge-daily-expenses p { margin: 14px 0 0; color: #687761; font-size: 11px; line-height: 1.8; }
+.judge-daily-care { display: flex; align-items: flex-start; gap: 16px; margin-top: 25px; padding: 23px 24px; border: 1px solid #dfe4da; border-radius: 10px; background: #eff3e9; }
+.judge-daily-care > div { min-width: 0; }
+.judge-daily-care h3 { margin: 1px 0 10px; color: #47765b; font-size: 12px; font-weight: 500; }
+.judge-daily-care p { margin: 0 0 10px; max-width: 760px; font-family: SimSun, serif; font-size: 15px; line-height: 1.95; }
+.judge-daily-care small { display: block; color: #6b7c62; font-size: 10px; line-height: 1.8; }
+.judge-daily-care-source { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 13px; }
+.judge-daily-care-source .judge-source-button { margin: 0; padding: 5px 0; font-size: 11px; }
+.judge-daily-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 13px 20px; margin-top: 23px; }
+.judge-daily-bottom > p { margin: 0; color: #6c7b65; font-size: 11px; line-height: 1.8; }
+.judge-daily-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.judge-daily-actions button { min-height: 38px; padding: 8px 13px; border: 1px solid #d6dfce; border-radius: 6px; color: #47765b; background: #fafbf7; font: inherit; font-size: 12px; cursor: pointer; }
+.judge-daily-actions button:last-child { background: #eaf0e4; }
+.judge-daily-sources { margin-top: 28px; padding-top: 12px; border-top: 1px solid #dfe4da; }
+.judge-daily-sources > summary { padding: 8px 0; color: #547052; font-size: 12px; cursor: pointer; }
+.judge-daily-sources-content { padding-top: 4px; }
+.judge-daily-sources-content > p { margin: 10px 0; color: #6c7a65; font-size: 11px; line-height: 1.9; }
+.judge-daily-source-toggles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.judge-daily-source-toggles label { display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 12px; border: 1px solid #dfe4da; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.judge-daily-source-toggles input { margin: 2px 0 0; accent-color: #47765b; }
+.judge-daily-source-toggles small { display: block; margin-top: 4px; color: #71806a; font-size: 10px; }
+.judge-daily-page button:focus-visible, .judge-daily-page summary:focus-visible, .judge-daily-page input:focus-visible { outline: 2px solid #47765b; outline-offset: 3px; }
+@media (max-width: 760px) {
+  .judge-daily-content { padding: 24px 16px 28px; }
+  .judge-daily-heading { align-items: flex-start; gap: 15px; flex-direction: column; }
+  .judge-daily-sample-note { text-align: left; }
+  .judge-daily-sample-note > span { display: inline; }
+  .judge-daily-sample-note > span + span::before { content: ' · '; }
+  .judge-daily-heading h2 { font-size: 25px; }
+  .judge-daily-date-nav { gap: 7px; margin: 22px 0; }
+  .judge-daily-date-nav button { padding: 8px 11px; }
+  .judge-daily-metrics { grid-template-columns: 1fr; gap: 11px; }
+  .judge-daily-metric { padding: 17px 18px 13px; }
+  .judge-daily-metric-note { min-height: 0; }
+  .judge-daily-metric-foot { margin-top: 13px; }
+  .judge-daily-detail { padding: 20px 16px; }
+  .judge-daily-detail-heading h3 { font-size: 16px; }
+  .judge-daily-chart { gap: 6px; }
+  .judge-daily-chart-day, .judge-daily-chart-value { font-size: 9px; }
+  .judge-daily-chart-track > span { width: min(100%, 22px); }
+  .judge-daily-chart-track { height: 78px; }
+  .judge-daily-detail th, .judge-daily-detail td { padding: 8px 5px; }
+  .judge-daily-care { gap: 12px; padding: 18px 15px; }
+  .judge-daily-care .product-avatar { width: 35px; height: 35px; flex-basis: 35px; }
+  .judge-daily-care p { font-size: 14px; }
+  .judge-daily-source-toggles { grid-template-columns: 1fr; gap: 8px; }
+}
